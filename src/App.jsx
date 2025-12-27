@@ -10,6 +10,45 @@ const WEAPON_TYPES = [
     { name: '回旋镖', emoji: '🎯', color: '#ff1493', damage: 18, special: 'boomerang', durability: 5 }
 ];
 
+// 伤害飘字类
+class DamageText {
+    constructor(x, y, damage, isCrit = false) {
+        this.x = x;
+        this.y = y;
+        this.damage = damage;
+        this.isCrit = isCrit;
+        this.vy = -2;
+        this.life = 60;
+        this.alpha = 1;
+    }
+
+    update() {
+        this.y += this.vy;
+        this.life--;
+        this.alpha = this.life / 60;
+        return this.life > 0;
+    }
+
+    draw(ctx) {
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+        ctx.font = `${this.isCrit ? 'bold ' : ''}20px Arial`;
+        ctx.textAlign = 'center';
+
+        if (this.isCrit) {
+            ctx.fillStyle = '#ffff00';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#ffff00';
+            ctx.fillText(`💥 ${this.damage}`, this.x, this.y);
+        } else {
+            ctx.fillStyle = '#ff6b6b';
+            ctx.fillText(this.damage, this.x, this.y);
+        }
+
+        ctx.restore();
+    }
+}
+
 // Weapon class
 class Weapon {
     constructor(x, y, canvasWidth, canvasHeight) {
@@ -61,7 +100,7 @@ class Weapon {
     }
 }
 
-// Stickman player class
+// Stickman player class with enhanced animations
 class Stickman {
     constructor(x, y, color, controls, playerNum, canvasWidth, canvasHeight) {
         this.x = x;
@@ -87,6 +126,7 @@ class Stickman {
         this.staminaRegen = 0.3;
 
         this.isJumping = false;
+        this.isCrouching = false; // 新增：下蹲状态
         this.isAttacking = false;
         this.attackCooldown = 0;
         this.attackRange = 50;
@@ -104,9 +144,17 @@ class Stickman {
         this.slowTimer = 0;
         this.stunTimer = 0;
 
+        // 受伤效果
+        this.hitFlashTimer = 0; // 闪烁效果
+        this.hurtAnimation = 0; // 受伤动画
+
+        // AI
         this.aiEnabled = false;
         this.aiState = 'idle';
         this.aiTimer = 0;
+
+        // 动画帧
+        this.animationFrame = 0;
     }
 
     update(keys, opponent) {
@@ -127,6 +175,16 @@ class Stickman {
             return; // 被眩晕时无法行动
         }
 
+        // 闪烁效果
+        if (this.hitFlashTimer > 0) {
+            this.hitFlashTimer--;
+        }
+
+        // 受伤动画
+        if (this.hurtAnimation > 0) {
+            this.hurtAnimation--;
+        }
+
         // AI控制
         if (this.aiEnabled && opponent) {
             this.updateAI(opponent);
@@ -136,17 +194,20 @@ class Stickman {
         // 玩家控制
         const speed = this.slowTimer > 0 ? this.speed * 0.5 : this.speed;
 
+        // 检测下蹲
+        this.isCrouching = keys[this.controls.block] && this.isJumping === false;
+
         // 左右移动
-        if (keys[this.controls.left]) {
+        if (keys[this.controls.left] && !this.isCrouching) {
             this.vx = -speed;
-        } else if (keys[this.controls.right]) {
+        } else if (keys[this.controls.right] && !this.isCrouching) {
             this.vx = speed;
         } else {
             this.vx *= 0.8; // 摩擦力
         }
 
         // 跳跃
-        if (keys[this.controls.jump] && !this.isJumping) {
+        if (keys[this.controls.jump] && !this.isJumping && !this.isCrouching) {
             this.vy = -this.jumpPower;
             this.isJumping = true;
             this.stamina -= 5;
@@ -157,15 +218,16 @@ class Stickman {
             this.attack(opponent);
         }
 
-        // 防御
-        if (keys[this.controls.block] && this.stamina > 0) {
+        // 防御（下蹲）
+        if (this.isCrouching) {
             this.isBlocking = true;
             this.stamina -= this.blockStaminaDrain;
+            this.vx = 0; // 下蹲时不能移动
         } else {
             this.isBlocking = false;
         }
 
-        // 武器使用 (F或J键)
+        // 武器使用
         if ((keys['f'] || keys['j']) && this.weapon) {
             this.useWeapon(opponent);
         }
@@ -201,6 +263,9 @@ class Stickman {
         if (Date.now() - this.lastHitTime > 2000) {
             this.combo = 0;
         }
+
+        // 动画帧
+        this.animationFrame++;
     }
 
     updateAI(opponent) {
@@ -209,7 +274,6 @@ class Stickman {
         const speed = this.slowTimer > 0 ? this.speed * 0.5 : this.speed;
         const distance = Math.abs(this.x - opponent.x);
 
-        // 简单状态机
         if (this.hp < 30) {
             this.aiState = 'defend';
         } else if (distance > 150) {
@@ -227,7 +291,6 @@ class Stickman {
                 } else {
                     this.vx = -speed;
                 }
-                // 随机跳跃
                 if (Math.random() < 0.02 && !this.isJumping) {
                     this.vy = -this.jumpPower;
                     this.isJumping = true;
@@ -238,7 +301,6 @@ class Stickman {
                 if (this.attackCooldown <= 0 && this.stamina >= 10) {
                     this.attack(opponent);
                 }
-                // 保持距离
                 if (distance < 40) {
                     this.vx = this.x < opponent.x ? -speed : speed;
                 }
@@ -247,19 +309,16 @@ class Stickman {
             case 'defend':
                 this.isBlocking = true;
                 this.stamina -= this.blockStaminaDrain;
-                // 后退
                 this.vx = this.x < opponent.x ? -speed : speed;
                 break;
 
             default:
                 this.vx *= 0.8;
-                // 偶尔随机移动
                 if (Math.random() < 0.01) {
                     this.vx = (Math.random() - 0.5) * speed;
                 }
         }
 
-        // 物理更新
         this.vy += this.gravity;
         this.x += this.vx;
         this.y += this.vy;
@@ -294,7 +353,6 @@ class Stickman {
         this.attackCooldown = 30;
         this.stamina -= 10;
 
-        // 检查距离
         const distance = Math.abs(this.x - opponent.x);
         if (distance <= this.attackRange) {
             let damage = this.attackDamage;
@@ -316,10 +374,9 @@ class Stickman {
                 opponent.stamina -= 5;
             }
 
-            opponent.takeDamage(damage, this);
+            opponent.takeDamage(damage, this, this.combo > 1);
             this.lastHitTime = Date.now();
 
-            // 播放音效
             if (this.controls.attack === 'a') {
                 this.playSound('punch');
             } else {
@@ -338,8 +395,8 @@ class Stickman {
         const distance = Math.abs(this.x - opponent.x);
         if (distance <= this.attackRange + 30) {
             let damage = this.weapon.baseDamage;
+            let isCrit = false;
 
-            // 特殊效果
             switch (this.weapon.special) {
                 case 'burn':
                     opponent.burnDamage = 2;
@@ -352,7 +409,10 @@ class Stickman {
                     opponent.slowTimer = 120;
                     break;
                 case 'crit':
-                    if (Math.random() < 0.3) damage *= 2;
+                    if (Math.random() < 0.3) {
+                        damage *= 2;
+                        isCrit = true;
+                    }
                     break;
                 case 'stun':
                     opponent.stunTimer = 30;
@@ -362,7 +422,7 @@ class Stickman {
                     break;
             }
 
-            opponent.takeDamage(damage, this);
+            opponent.takeDamage(damage, this, isCrit);
             this.weapon.durability--;
 
             if (this.weapon.durability <= 0) {
@@ -373,18 +433,33 @@ class Stickman {
         }
     }
 
-    takeDamage(damage, attacker) {
+    takeDamage(damage, attacker, isCrit = false) {
         if (this.isBlocking && this.stamina > 0) {
             damage = Math.floor(damage * 0.3);
             this.stamina -= 10;
         }
 
         this.hp -= damage;
+        this.hitFlashTimer = 10; // 闪烁10帧
+        this.hurtAnimation = 15; // 受伤动画15帧
 
         // 击退
         if (attacker) {
             const direction = this.x < attacker.x ? -1 : 1;
             this.vx = direction * 5;
+        }
+
+        // 创建伤害飘字
+        if (window.damageTexts) {
+            const crit = isCrit || damage > 20;
+            window.damageTexts.push(
+                new DamageText(
+                    this.x + this.width / 2,
+                    this.y + 10,
+                    damage,
+                    crit
+                )
+            );
         }
 
         this.playSound('hit');
@@ -396,7 +471,6 @@ class Stickman {
     }
 
     playSound(type) {
-        // 音效模拟（在React中通过Web Audio API实现）
         if (!window.audioContext) return;
 
         try {
@@ -442,6 +516,11 @@ class Stickman {
     draw(ctx) {
         ctx.save();
 
+        // 闪烁效果（受伤时）
+        if (this.hitFlashTimer > 0 && this.hitFlashTimer % 2 === 0) {
+            ctx.globalAlpha = 0.5;
+        }
+
         // 状态效果视觉反馈
         if (this.burnTimer > 0) {
             ctx.shadowBlur = 20;
@@ -463,60 +542,123 @@ class Stickman {
         ctx.lineWidth = 3;
         ctx.lineCap = 'round';
 
+        // 计算姿势偏移
+        let bodyY = this.y;
+        let legOffset = 8;
+        let armOffset = this.isAttacking ? 10 : 5;
+
+        // 下蹲姿势
+        if (this.isCrouching) {
+            bodyY = this.y + 15;
+            legOffset = 4;
+        }
+
+        // 受伤弯腰
+        if (this.hurtAnimation > 0) {
+            bodyY += 5;
+        }
+
+        // 跳跃伸展
+        if (this.isJumping) {
+            legOffset = 12;
+        }
+
         // 头
         ctx.beginPath();
-        ctx.arc(this.x + this.width/2, this.y + 10, 8, 0, Math.PI * 2);
+        ctx.arc(this.x + this.width/2, bodyY + 10, 8, 0, Math.PI * 2);
         ctx.stroke();
 
         // 身体
         ctx.beginPath();
-        ctx.moveTo(this.x + this.width/2, this.y + 18);
-        ctx.lineTo(this.x + this.width/2, this.y + 40);
+        ctx.moveTo(this.x + this.width/2, bodyY + 18);
+        ctx.lineTo(this.x + this.width/2, bodyY + 40);
         ctx.stroke();
 
         // 手臂
-        const armOffset = this.isAttacking ? 10 : 5;
         ctx.beginPath();
         if (this.controls.attack === 'a') {
             // 玩家1（红色）- 左手攻击
-            ctx.moveTo(this.x + this.width/2, this.y + 22);
-            ctx.lineTo(this.x + this.width/2 - armOffset, this.y + 30);
+            ctx.moveTo(this.x + this.width/2, bodyY + 22);
+            ctx.lineTo(this.x + this.width/2 - armOffset, bodyY + 30);
+
+            // 武器在左手
+            if (this.weapon && this.isAttacking) {
+                ctx.font = '18px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(this.weapon.emoji, this.x + this.width/2 - armOffset - 5, bodyY + 30);
+            }
         } else {
             // 玩家2（蓝色）- 右手攻击
-            ctx.moveTo(this.x + this.width/2, this.y + 22);
-            ctx.lineTo(this.x + this.width/2 + armOffset, this.y + 30);
+            ctx.moveTo(this.x + this.width/2, bodyY + 22);
+            ctx.lineTo(this.x + this.width/2 + armOffset, bodyY + 30);
+
+            // 武器在右手
+            if (this.weapon && this.isAttacking) {
+                ctx.font = '18px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(this.weapon.emoji, this.x + this.width/2 + armOffset + 5, bodyY + 30);
+            }
         }
         ctx.stroke();
 
         // 腿
         ctx.beginPath();
-        ctx.moveTo(this.x + this.width/2, this.y + 40);
-        ctx.lineTo(this.x + this.width/2 - 8, this.y + 60);
-        ctx.moveTo(this.x + this.width/2, this.y + 40);
-        ctx.lineTo(this.x + this.width/2 + 8, this.y + 60);
+        ctx.moveTo(this.x + this.width/2, bodyY + 40);
+        ctx.lineTo(this.x + this.width/2 - legOffset, bodyY + 60);
+        ctx.moveTo(this.x + this.width/2, bodyY + 40);
+        ctx.lineTo(this.x + this.width/2 + legOffset, bodyY + 60);
         ctx.stroke();
 
-        // 防御姿态
+        // 防御/下蹲姿态
         if (this.isBlocking) {
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(this.x + this.width/2, this.y + 30, 15, 0, Math.PI * 2);
-            ctx.stroke();
+
+            if (this.isCrouching) {
+                // 下蹲防御 - 盾牌在前方
+                ctx.beginPath();
+                ctx.arc(this.x + this.width/2 + 10, bodyY + 35, 12, 0, Math.PI * 2);
+                ctx.stroke();
+            } else {
+                // 站立防御
+                ctx.beginPath();
+                ctx.arc(this.x + this.width/2, bodyY + 30, 15, 0, Math.PI * 2);
+                ctx.stroke();
+            }
         }
 
-        // 武器图标
-        if (this.weapon) {
+        // 武器图标（手持状态，非攻击时）
+        if (this.weapon && !this.isAttacking) {
             ctx.font = '16px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText(this.weapon.emoji, this.x + this.width/2, this.y - 15);
+            ctx.fillText(this.weapon.emoji, this.x + this.width/2, bodyY - 15);
+        }
+
+        // 攻击特效（拳击/踢击轨迹）
+        if (this.isAttacking) {
+            ctx.save();
+            ctx.globalAlpha = 0.5;
+            ctx.fillStyle = this.color;
+
+            if (this.controls.attack === 'a') {
+                // 左拳轨迹
+                ctx.beginPath();
+                ctx.arc(this.x + this.width/2 - armOffset - 5, bodyY + 30, 4, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                // 右脚轨迹
+                ctx.beginPath();
+                ctx.arc(this.x + this.width/2 + armOffset + 5, bodyY + 35, 5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
         }
 
         // 血条和体力条
         const barWidth = 40;
         const barHeight = 4;
         const barX = this.x + this.width/2 - barWidth/2;
-        const barY = this.y - 25;
+        const barY = bodyY - 25;
 
         // 血条背景
         ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
@@ -565,6 +707,7 @@ export default function App() {
         player2: null,
         weapons: [],
         weaponDropTimer: 0,
+        damageTexts: [], // 伤害飘字数组
         stats: {
             p1: { hits: 0, damage: 0, maxCombo: 0, weaponsCollected: 0 },
             p2: { hits: 0, damage: 0, maxCombo: 0, weaponsCollected: 0 }
@@ -586,7 +729,6 @@ export default function App() {
             }
         };
 
-        // Initialize on user interaction
         document.addEventListener('click', initAudio, { once: true });
         document.addEventListener('touchstart', initAudio, { once: true });
     }, [gameState.soundEnabled]);
@@ -652,7 +794,6 @@ export default function App() {
         const ctx = canvas.getContext('2d');
         const container = canvas.parentElement;
 
-        // Resize canvas
         const resizeCanvas = () => {
             if (!container) return;
             const containerWidth = container.clientWidth;
@@ -680,7 +821,6 @@ export default function App() {
         resizeCanvas();
         window.addEventListener('resize', resizeCanvas);
 
-        // Initialize players
         gameRef.current.player1 = new Stickman(
             150, 0, '#ff6b6b',
             { left: 'a', right: 'd', jump: 'w', attack: ' ', block: 's' },
@@ -697,12 +837,10 @@ export default function App() {
             gameRef.current.canvasHeight
         );
 
-        // Position on ground
         const groundLevel = gameRef.current.canvasHeight - 80;
         gameRef.current.player1.y = groundLevel - gameRef.current.player1.height;
         gameRef.current.player2.y = groundLevel - gameRef.current.player2.height;
 
-        // Reset state
         setGameState(prev => ({
             ...prev,
             gameOver: false,
@@ -711,11 +849,15 @@ export default function App() {
         }));
 
         gameRef.current.weapons = [];
+        gameRef.current.damageTexts = [];
         gameRef.current.weaponDropTimer = 0;
         gameRef.current.stats = {
             p1: { hits: 0, damage: 0, maxCombo: 0, weaponsCollected: 0 },
             p2: { hits: 0, damage: 0, maxCombo: 0, weaponsCollected: 0 }
         };
+
+        // 全局访问伤害文本
+        window.damageTexts = gameRef.current.damageTexts;
 
         showNotification('🔥 战斗开始！', 1500);
 
@@ -729,14 +871,12 @@ export default function App() {
         const width = gameRef.current.canvasWidth;
         const height = gameRef.current.canvasHeight;
 
-        // Sky gradient
         const skyGradient = ctx.createLinearGradient(0, 0, 0, height * 0.5);
         skyGradient.addColorStop(0, '#87CEEB');
         skyGradient.addColorStop(1, '#E0F6FF');
         ctx.fillStyle = skyGradient;
         ctx.fillRect(0, 0, width, height * 0.5);
 
-        // Ground
         const groundY = height - 80;
         const groundGradient = ctx.createLinearGradient(0, groundY, 0, height);
         groundGradient.addColorStop(0, '#90EE90');
@@ -744,7 +884,6 @@ export default function App() {
         ctx.fillStyle = groundGradient;
         ctx.fillRect(0, groundY, width, 80);
 
-        // Ground pattern (grass)
         ctx.strokeStyle = 'rgba(0, 100, 0, 0.3)';
         ctx.lineWidth = 2;
         for (let i = 0; i < width; i += 20) {
@@ -754,7 +893,6 @@ export default function App() {
             ctx.stroke();
         }
 
-        // Clouds
         ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
         ctx.beginPath();
         ctx.arc(100, 50, 20, 0, Math.PI * 2);
@@ -772,19 +910,16 @@ export default function App() {
     // Draw weapons
     const drawWeapons = (ctx) => {
         gameRef.current.weapons.forEach(weapon => {
-            // 光效
             ctx.save();
             ctx.shadowBlur = 15;
             ctx.shadowColor = weapon.color;
 
-            // 武器主体
             ctx.fillStyle = weapon.color;
             ctx.font = '20px Arial';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(weapon.emoji, weapon.x + weapon.width/2, weapon.y + weapon.height/2);
 
-            // 耐久度
             if (weapon.durability > 0) {
                 const barWidth = 20;
                 const barHeight = 3;
@@ -801,6 +936,15 @@ export default function App() {
         });
     };
 
+    // Draw damage texts
+    const drawDamageTexts = (ctx) => {
+        gameRef.current.damageTexts = gameRef.current.damageTexts.filter(dt => {
+            const alive = dt.update();
+            if (alive) dt.draw(ctx);
+            return alive;
+        });
+    };
+
     // Game loop
     const gameLoop = useCallback(() => {
         const canvas = canvasRef.current;
@@ -810,10 +954,8 @@ export default function App() {
         const p1 = gameRef.current.player1;
         const p2 = gameRef.current.player2;
 
-        // Clear canvas
         ctx.clearRect(0, 0, gameRef.current.canvasWidth, gameRef.current.canvasHeight);
 
-        // Draw background
         drawBackground(ctx);
 
         // Update and draw weapons
@@ -823,9 +965,8 @@ export default function App() {
                 return !weapon.isExpired();
             });
 
-            // Weapon drop system
             gameRef.current.weaponDropTimer++;
-            if (gameRef.current.weaponDropTimer > 300) { // Every 5 seconds
+            if (gameRef.current.weaponDropTimer > 300) {
                 const x = Math.random() * (gameRef.current.canvasWidth - 100) + 50;
                 const weapon = new Weapon(x, 100, gameRef.current.canvasWidth, gameRef.current.canvasHeight);
                 gameRef.current.weapons.push(weapon);
@@ -833,10 +974,8 @@ export default function App() {
                 showNotification('✨ 武器掉落!', 800);
             }
 
-            // Weapon pickup
             gameRef.current.weapons.forEach((weapon, index) => {
                 if (weapon.onGround) {
-                    // Check collision with players
                     const p1Dist = Math.abs(p1.x - weapon.x) + Math.abs(p1.y - weapon.y);
                     const p2Dist = Math.abs(p2.x - weapon.x) + Math.abs(p2.y - weapon.y);
 
@@ -862,7 +1001,6 @@ export default function App() {
             p1.update(keys, p2);
             p2.update(keys, p1);
 
-            // Check for weapon use and update stats
             if (p1.weapon && p1.weapon.durability < p1.weapon.maxDurability) {
                 gameRef.current.stats.p1.damage += p1.weapon.baseDamage;
             }
@@ -870,7 +1008,6 @@ export default function App() {
                 gameRef.current.stats.p2.damage += p2.weapon.baseDamage;
             }
 
-            // Check game over
             if (p1.hp <= 0 || p2.hp <= 0) {
                 const winner = p1.hp > 0 ? '玩家1' : '玩家2';
                 setGameState(prev => ({
@@ -881,7 +1018,6 @@ export default function App() {
                 showNotification(`🎉 ${winner} 获胜!`, 3000);
             }
 
-            // Update combo indicator
             if (p1.combo > 1 || p2.combo > 1) {
                 const maxCombo = Math.max(p1.combo, p2.combo);
                 setCombo({ show: true, text: `${maxCombo} 连击!` });
@@ -889,7 +1025,6 @@ export default function App() {
                 setCombo({ show: false, text: '' });
             }
 
-            // Update weapon status
             if (p1.weapon || p2.weapon) {
                 const status = [];
                 if (p1.weapon) status.push(`🔵: ${p1.weapon.name}(${p1.weapon.durability})`);
@@ -904,13 +1039,14 @@ export default function App() {
         p1.draw(ctx);
         p2.draw(ctx);
 
-        // Continue loop
+        // Draw damage texts
+        drawDamageTexts(ctx);
+
         if (!gameState.gameOver) {
             gameRef.current.animationFrame = requestAnimationFrame(gameLoop);
         }
     }, [keys, gameState.paused, gameState.gameOver]);
 
-    // Start game loop
     useEffect(() => {
         if (!gameState.gameOver && gameRef.current.player1 && gameRef.current.player2) {
             gameRef.current.animationFrame = requestAnimationFrame(gameLoop);
@@ -923,7 +1059,6 @@ export default function App() {
         };
     }, [gameLoop, gameState.gameOver]);
 
-    // Show notification
     const showNotification = (message, duration = 1500) => {
         setNotification({ show: true, message, duration });
         setTimeout(() => {
@@ -931,7 +1066,6 @@ export default function App() {
         }, duration);
     };
 
-    // Button handlers
     const handleStart = () => {
         initGame();
     };
@@ -1007,7 +1141,7 @@ export default function App() {
             '⚡ 闪电锤 - 20伤害 + 击退\n' +
             '🧊 冰霜弓 - 12伤害 + 减速\n' +
             '💎 钻石匕首 - 25伤害 + 暴击\n' +
-            '🪓 战斧 - 22伤害 + 重击\n' +
+            '🪓 战斧 - 22伤害 + 眩晕\n' +
             '🎯 回旋镖 - 18伤害 + 特效\n\n' +
             '🎯 机制：每5-10秒掉落\n' +
             '🎯 靠近自动拾取\n' +
@@ -1028,7 +1162,6 @@ export default function App() {
         }
     };
 
-    // Touch controls for mobile
     const handleTouchStart = (key) => {
         setKeys(prev => ({ ...prev, [key]: true }));
     };
@@ -1039,7 +1172,6 @@ export default function App() {
 
     return (
         <div className="main-container">
-            {/* Portrait Warning */}
             {gameState.showPortraitWarning && (
                 <div className="portrait-warning show">
                     <div className="icon">📱</div>
@@ -1048,7 +1180,6 @@ export default function App() {
                 </div>
             )}
 
-            {/* Left Control Panel - Player 1 */}
             <div className="control-panel-left">
                 <div className="player-label p1">🔴 玩家1</div>
                 <div className="control-row">
@@ -1101,9 +1232,7 @@ export default function App() {
                 </div>
             </div>
 
-            {/* Center - Canvas and Status */}
             <div style={{flex: 1, display: 'flex', flexDirection: 'column', height: '100%', position: 'relative'}}>
-                {/* Top Status Bar */}
                 <div className="status-bar-top">
                     <div className="player-status-mini">
                         <div className="mini-name" style={{color: '#ff6b6b'}}>🔴 玩家1</div>
@@ -1149,22 +1278,18 @@ export default function App() {
                     </div>
                 </div>
 
-                {/* Combo Indicator */}
                 {combo.show && (
                     <div className="combo-indicator show">{combo.text}</div>
                 )}
 
-                {/* Weapon Status */}
                 {weaponStatus.show && (
                     <div className="weapon-status show">{weaponStatus.text}</div>
                 )}
 
-                {/* Mode Indicator */}
                 {modeIndicator.show && (
                     <div className="mode-indicator">{modeIndicator.text}</div>
                 )}
 
-                {/* Canvas Container */}
                 <div className="canvas-container">
                     <canvas
                         ref={canvasRef}
@@ -1179,7 +1304,6 @@ export default function App() {
                         }}
                     />
 
-                    {/* Game Over Overlay */}
                     {gameState.gameOver && (
                         <div className="game-over-overlay show">
                             <div className="winner-text">{gameState.winner} 获胜!</div>
@@ -1188,7 +1312,6 @@ export default function App() {
                     )}
                 </div>
 
-                {/* Bottom Controls */}
                 <div className="bottom-controls">
                     <button className="func-btn fullscreen" onClick={handleFullscreen}>🖥️ 全屏</button>
                     <button
@@ -1214,7 +1337,6 @@ export default function App() {
                 </div>
             </div>
 
-            {/* Right Control Panel - Player 2 */}
             <div className="control-panel-right">
                 <div className="player-label p2">🔵 玩家2</div>
                 <div className="control-row">
@@ -1267,7 +1389,6 @@ export default function App() {
                 </div>
             </div>
 
-            {/* Notification */}
             {notification.show && (
                 <div className="notification show" style={{whiteSpace: 'pre-line'}}>
                     {notification.message}
