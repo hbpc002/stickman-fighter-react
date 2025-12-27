@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: stickman-fighter-react
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm run preview
+    envVars:
+      - key: PORT
+        value: 4173
+    healthCheckPath: /
