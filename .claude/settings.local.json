@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\n终极格斗游戏增强版 - 代码重构与优化\n\n- 重构App.jsx，简化主组件逻辑\n- 新增类系统: Stickman, VisualEffects, Weapons\n- 新增Hooks: useDeviceDetection, useGameAudio\n- 新增工具函数: gameUtils.js\n- 增强CSS样式和视觉效果\n- 添加优化总结文档\n- 保留App.jsx.backup作为备份\n\n🤖 Generated with [Claude Code]\\(https://claude.com/claude-code\\)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git push:*)"
     ]
   }
 }

@@ -1,0 +1,9 @@
+{
+  "action": "idle",
+  "frameCount": 12,
+  "frameWidth": 64,
+  "frameHeight": 64,
+  "sheetWidth": 768,
+  "sheetHeight": 64,
+  "fps": 12
+}

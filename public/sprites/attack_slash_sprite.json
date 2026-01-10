@@ -1,0 +1,9 @@
+{
+  "action": "attack_slash",
+  "frameCount": 6,
+  "frameWidth": 64,
+  "frameHeight": 64,
+  "sheetWidth": 384,
+  "sheetHeight": 64,
+  "fps": 12
+}

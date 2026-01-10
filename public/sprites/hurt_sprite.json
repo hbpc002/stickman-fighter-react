@@ -1,0 +1,9 @@
+{
+  "action": "hurt",
+  "frameCount": 3,
+  "frameWidth": 64,
+  "frameHeight": 64,
+  "sheetWidth": 192,
+  "sheetHeight": 64,
+  "fps": 12
+}

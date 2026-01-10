@@ -1,0 +1,41 @@
+🎯 SPRITE SHEET GENERATION - QUICK REFERENCE
+
+📁 Folders Created:
+   sprite_assets/     → Input PNG sequences
+   public/sprites/    → Generated sprite sheets
+
+🎬 Action Frame Requirements:
+   idle          = 12 frames (breathing, bounce, hair sway)
+   walk          = 8 frames  (alternating legs, arm swing)
+   run           = 6 frames  (both feet off ground)
+   attack_slash  = 6 frames  (anticipation→swing→follow-through)
+   hurt          = 3 frames  (sudden lean back, flash)
+   victory       = 8 frames  (jump, hand raise, sparkle)
+
+🚀 Commands:
+   ./create_spritesheets.sh setup      → Create folders
+   ./create_spritesheets.sh generate   → Generate sprites
+   ./create_spritesheets.sh sample     → Show example structure
+   ./create_spritesheets.sh help       → Full help
+
+📁 Input Structure Example:
+   sprite_assets/
+   ├── idle/
+   │   ├── frame_01.png
+   │   ├── frame_02.png
+   │   └── ... (12 files)
+   ├── walk/
+   │   ├── frame_01.png
+   │   ├── frame_02.png
+   │   └── ... (8 files)
+   └── ...
+
+📤 Output:
+   public/sprites/
+   ├── idle_sprite.png
+   ├── idle_sprite.json
+   ├── walk_sprite.png
+   ├── walk_sprite.json
+   └── ...
+
+📖 Full Guide: SPRITE_GENERATION_GUIDE.md

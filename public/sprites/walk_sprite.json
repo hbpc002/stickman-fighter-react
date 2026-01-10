@@ -1,0 +1,9 @@
+{
+  "action": "walk",
+  "frameCount": 8,
+  "frameWidth": 64,
+  "frameHeight": 64,
+  "sheetWidth": 512,
+  "sheetHeight": 64,
+  "fps": 12
+}
