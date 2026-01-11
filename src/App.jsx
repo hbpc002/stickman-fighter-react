@@ -33,7 +33,9 @@ export default function App() {
         aiEnabled: false,
         hardcoreMode: false,
         isMobile: false,
-        showPortraitWarning: false
+        showPortraitWarning: false,
+        gameStarted: false,
+        victoryAnimation: false
     });
 
     const [keys, setKeys] = useState({});
@@ -408,57 +410,87 @@ export default function App() {
         drawWeapons(ctx, gameRef.current.weapons);
 
         if (!gameState.paused && !gameState.gameOver) {
-            // 更新玩家（传递deltaTime给SpriteStickman）
-            if (p1.update.length >= 3) {
-                p1.update(keys, p2, deltaTime);
+            // 如果正在进行胜利动画，只更新动画不进行正常游戏逻辑
+            if (gameState.victoryAnimation) {
+                // 胜利动画模式：只更新动画，不进行碰撞检测等
+                // 对于SpriteStickman，需要调用updateVictoryAnimation来更新精灵帧
+                // 对于Stickman，updateVictoryAnimation会处理程序化动画更新
+                if (p1.updateVictoryAnimation) p1.updateVictoryAnimation();
+                if (p2.updateVictoryAnimation) p2.updateVictoryAnimation();
             } else {
-                p1.update(keys, p2);
-            }
-
-            if (p2.update.length >= 3) {
-                p2.update(keys, p1, deltaTime);
-            } else {
-                p2.update(keys, p1);
-            }
-
-            // 统计
-            if (p1.weapon && p1.weapon.durability < p1.weapon.maxDurability) {
-                gameRef.current.stats.p1.damage += p1.weapon.baseDamage;
-            }
-            if (p2.weapon && p2.weapon.durability < p2.weapon.maxDurability) {
-                gameRef.current.stats.p2.damage += p2.weapon.baseDamage;
-            }
-
-            // 游戏结束检测（含生存模式）
-            if (p1.hp <= 0 || p2.hp <= 0) {
-                if (survivalMode && p2.hp <= 0) {
-                    // 生存模式：AI复活并增强
-                    const groundLevel = gameRef.current.canvasHeight - 80;
-                    const StickmanClass = loaded ? SpriteStickman : Stickman;
-                    gameRef.current.player2 = new StickmanClass(
-                        620, 0, '#4dabf7',
-                        { left: 'arrowleft', right: 'arrowright', jump: 'arrowup', attack: 'j', block: 'k' },
-                        2,
-                        gameRef.current.canvasWidth,
-                        gameRef.current.canvasHeight
-                    );
-                    gameRef.current.player2.y = groundLevel - gameRef.current.player2.height;
-                    gameRef.current.player2.aiEnabled = true;
-                    gameRef.current.player2.attackDamage += 2;
-                    gameRef.current.player2.maxHp += 10;
-                    gameRef.current.player2.hp = gameRef.current.player2.maxHp;
-                    if (loaded && gameRef.current.player2.checkSpriteAvailability) {
-                        gameRef.current.player2.checkSpriteAvailability();
-                    }
-                    showNotification('💀 AI复活! 强度提升!', 1500);
+                // 正常游戏模式
+                // 更新玩家（传递deltaTime给SpriteStickman）
+                if (p1.update.length >= 3) {
+                    p1.update(keys, p2, deltaTime);
                 } else {
-                    const winner = p1.hp > 0 ? '玩家1' : '玩家2';
-                    setGameState(prev => ({
-                        ...prev,
-                        gameOver: true,
-                        winner: winner
-                    }));
-                    showNotification(`🎉 ${winner} 获胜!`, 3000);
+                    p1.update(keys, p2);
+                }
+
+                if (p2.update.length >= 3) {
+                    p2.update(keys, p1, deltaTime);
+                } else {
+                    p2.update(keys, p1);
+                }
+
+                // 统计
+                if (p1.weapon && p1.weapon.durability < p1.weapon.maxDurability) {
+                    gameRef.current.stats.p1.damage += p1.weapon.baseDamage;
+                }
+                if (p2.weapon && p2.weapon.durability < p2.weapon.maxDurability) {
+                    gameRef.current.stats.p2.damage += p2.weapon.baseDamage;
+                }
+
+                // 游戏结束检测（含生存模式）
+                if (p1.hp <= 0 || p2.hp <= 0) {
+                    if (survivalMode && p2.hp <= 0) {
+                        // 生存模式：AI复活并增强
+                        const groundLevel = gameRef.current.canvasHeight - 80;
+                        const StickmanClass = loaded ? SpriteStickman : Stickman;
+                        gameRef.current.player2 = new StickmanClass(
+                            620, 0, '#4dabf7',
+                            { left: 'arrowleft', right: 'arrowright', jump: 'arrowup', attack: 'j', block: 'k' },
+                            2,
+                            gameRef.current.canvasWidth,
+                            gameRef.current.canvasHeight
+                        );
+                        gameRef.current.player2.y = groundLevel - gameRef.current.player2.height;
+                        gameRef.current.player2.aiEnabled = true;
+                        gameRef.current.player2.attackDamage += 2;
+                        gameRef.current.player2.maxHp += 10;
+                        gameRef.current.player2.hp = gameRef.current.player2.maxHp;
+                        if (loaded && gameRef.current.player2.checkSpriteAvailability) {
+                            gameRef.current.player2.checkSpriteAvailability();
+                        }
+                        showNotification('💀 AI复活! 强度提升!', 1500);
+                    } else if (!gameState.victoryAnimation) {
+                        // 只在第一次检测到胜利时执行
+                        const winner = p1.hp > 0 ? '玩家1' : '玩家2';
+                        const winningPlayer = p1.hp > 0 ? p1 : p2;
+
+                        // 设置胜利状态和动画标志
+                        setGameState(prev => ({
+                            ...prev,
+                            winner: winner,
+                            victoryAnimation: true
+                        }));
+
+                        // 设置胜利玩家的动画状态
+                        if (loaded && winningPlayer.setVictoryAnimation) {
+                            winningPlayer.setVictoryAnimation();
+                        } else if (winningPlayer.setVictoryAnimation) {
+                            winningPlayer.setVictoryAnimation();
+                        }
+
+                        // 延迟2秒后显示游戏结束界面
+                        setTimeout(() => {
+                            setGameState(prev => ({
+                                ...prev,
+                                gameOver: true,
+                                victoryAnimation: false
+                            }));
+                            showNotification(`🎉 ${winner} 获胜!`, 3000);
+                        }, 2000);
+                    }
                 }
             }
 
@@ -497,13 +529,14 @@ export default function App() {
             laserTrails: gameRef.current.laserTrails
         });
 
-        if (!gameState.gameOver) {
+        // 继续游戏循环：如果游戏未结束，或者正在进行胜利动画
+        if (!gameState.gameOver || gameState.victoryAnimation) {
             gameRef.current.animationFrame = requestAnimationFrame(gameLoop);
         }
-    }, [keys, gameState.paused, gameState.gameOver, survivalMode, loaded]);
+    }, [keys, gameState.paused, gameState.gameOver, gameState.victoryAnimation, survivalMode, loaded]);
 
     useEffect(() => {
-        if (!gameState.gameOver && gameRef.current.player1 && gameRef.current.player2) {
+        if ((!gameState.gameOver || gameState.victoryAnimation) && gameRef.current.player1 && gameRef.current.player2) {
             gameRef.current.animationFrame = requestAnimationFrame(gameLoop);
         }
 
@@ -512,7 +545,7 @@ export default function App() {
                 cancelAnimationFrame(gameRef.current.animationFrame);
             }
         };
-    }, [gameLoop, gameState.gameOver]);
+    }, [gameLoop, gameState.gameOver, gameState.victoryAnimation]);
 
     // 通知系统
     const showNotification = (message, duration = 1500) => {
@@ -523,12 +556,23 @@ export default function App() {
     };
 
     // 游戏控制处理
-    const handleStart = () => {
-        if (!loaded && !loading) {
-            showNotification('⚠️ 精灵加载中，请稍候...', 1500);
-            return;
+    const handleStart = async () => {
+        // 自动全屏
+        if (!document.fullscreenElement) {
+            try {
+                await document.documentElement.requestFullscreen();
+            } catch (err) {
+                console.log('全屏失败:', err);
+            }
         }
-        initGame();
+
+        // 设置游戏已开始状态
+        setGameState(prev => ({ ...prev, gameStarted: true }));
+
+        // 延迟一小段时间，让全屏生效后再初始化游戏
+        setTimeout(() => {
+            initGame();
+        }, 100);
     };
 
     const handlePause = () => {
@@ -610,6 +654,13 @@ export default function App() {
         if (gameRef.current.animationFrame) {
             cancelAnimationFrame(gameRef.current.animationFrame);
         }
+        // 重置游戏状态，但保持gameStarted为true
+        setGameState(prev => ({
+            ...prev,
+            gameOver: false,
+            paused: false,
+            winner: null
+        }));
         initGame();
     };
 
@@ -656,332 +707,353 @@ export default function App() {
 
     return (
         <div className="main-container">
-            {showPortraitWarning && (
-                <div className="portrait-warning show">
-                    <div className="icon">📱</div>
-                    <h2>请旋转设备</h2>
-                    <p>建议使用横屏模式以获得最佳体验</p>
+            {/* 开始界面 - 未开始游戏时显示 */}
+            {!gameState.gameStarted && (
+                <div className="start-screen">
+                    <div className="start-content">
+                        <h1 className="game-title">🔥 火柴人格斗 🔥</h1>
+                        <p className="game-subtitle">双人对战 - 精灵动画版</p>
+                        <button
+                            className="start-button"
+                            onClick={handleStart}
+                        >
+                            开始游戏
+                        </button>
+                        <div className="loading-hint">
+                            点击开始按钮，将自动进入全屏模式
+                        </div>
+                    </div>
                 </div>
             )}
 
-            {/* 精灵加载状态显示 */}
-            {loading && (
-                <div className="sprite-loading-overlay">
-                    <div className="loading-content">
-                        <div className="loading-spinner"></div>
-                        <h3>加载精灵动画中...</h3>
-                        <div className="loading-bar">
-                            <div className="loading-progress" style={{width: `${progress}%`}}></div>
+            {/* 游戏内容 - 只在开始后显示 */}
+            {gameState.gameStarted && (
+                <>
+                    {showPortraitWarning && (
+                        <div className="portrait-warning show">
+                            <div className="icon">📱</div>
+                            <h2>请旋转设备</h2>
+                            <p>建议使用横屏模式以获得最佳体验</p>
                         </div>
-                        <div className="loading-text">{progress}%</div>
-                        <div className="sprite-status">
-                            {Object.entries(spriteStatus).map(([action, status]) => (
-                                <div key={action} className={`status-item ${status}`}>
-                                    {action}: {status === 'loaded' ? '✅' : status === 'failed' ? '❌' : '⏳'}
+                    )}
+
+                    {/* 精灵加载状态显示 */}
+                    {loading && (
+                        <div className="sprite-loading-overlay">
+                            <div className="loading-content">
+                                <div className="loading-spinner"></div>
+                                <h3>加载精灵动画中...</h3>
+                                <div className="loading-bar">
+                                    <div className="loading-progress" style={{width: `${progress}%`}}></div>
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* 精灵加载失败提示 */}
-            {error && !loading && (
-                <div className="notification show" style={{background: 'rgba(255, 100, 100, 0.9)'}}>
-                    {error}
-                </div>
-            )}
-
-            <div className="control-panel-left">
-                <div className="player-label p1">🔴 玩家1</div>
-                <div className="control-row">
-                    <button
-                        className={`btn jump ${keys['w'] ? 'active' : ''}`}
-                        onTouchStart={() => handleTouchStart('w')}
-                        onTouchEnd={() => handleTouchEnd('w')}
-                        onMouseDown={() => handleTouchStart('w')}
-                        onMouseUp={() => handleTouchEnd('w')}
-                        onMouseLeave={() => handleTouchEnd('w')}
-                    >W</button>
-                </div>
-                <div className="control-row" style={{display: 'flex', gap: '5px'}}>
-                    <button
-                        className={`btn move ${keys['a'] ? 'active' : ''}`}
-                        onTouchStart={() => handleTouchStart('a')}
-                        onTouchEnd={() => handleTouchEnd('a')}
-                        onMouseDown={() => handleTouchStart('a')}
-                        onMouseUp={() => handleTouchEnd('a')}
-                        onMouseLeave={() => handleTouchEnd('a')}
-                    >A</button>
-                    <button
-                        className={`btn move ${keys['d'] ? 'active' : ''}`}
-                        onTouchStart={() => handleTouchStart('d')}
-                        onTouchEnd={() => handleTouchEnd('d')}
-                        onMouseDown={() => handleTouchStart('d')}
-                        onMouseUp={() => handleTouchEnd('d')}
-                        onMouseLeave={() => handleTouchEnd('d')}
-                    >D</button>
-                </div>
-                <div className="control-row">
-                    <button
-                        className={`btn attack ${keys[' '] ? 'active' : ''}`}
-                        onTouchStart={() => handleTouchStart(' ')}
-                        onTouchEnd={() => handleTouchEnd(' ')}
-                        onMouseDown={() => handleTouchStart(' ')}
-                        onMouseUp={() => handleTouchEnd(' ')}
-                        onMouseLeave={() => handleTouchEnd(' ')}
-                    >👊</button>
-                </div>
-                <div className="control-row">
-                    <button
-                        className={`btn attack ${keys['s'] ? 'active' : ''}`}
-                        onTouchStart={() => handleTouchStart('s')}
-                        onTouchEnd={() => handleTouchEnd('s')}
-                        onMouseDown={() => handleTouchStart('s')}
-                        onMouseUp={() => handleTouchEnd('s')}
-                        onMouseLeave={() => handleTouchEnd('s')}
-                    >🛡️</button>
-                </div>
-            </div>
-
-            <div style={{flex: 1, display: 'flex', flexDirection: 'column', height: '100%', position: 'relative'}}>
-                <div className="status-bar-top">
-                    <div className="player-status-mini">
-                        <div className="mini-name" style={{color: '#ff6b6b'}}>🔴 玩家1</div>
-                        <div className="mini-hp">
-                            <div
-                                className="mini-hp-fill"
-                                style={{
-                                    width: `${gameRef.current.player1 ? (gameRef.current.player1.hp / gameRef.current.player1.maxHp * 100) : 100}%`,
-                                    background: 'linear-gradient(90deg, #ff6b6b, #ff8787)'
-                                }}
-                            ></div>
-                        </div>
-                        <div className="mini-stamina">
-                            <div
-                                className="mini-stamina-fill"
-                                style={{
-                                    width: `${gameRef.current.player1 ? (gameRef.current.player1.stamina / gameRef.current.player1.maxStamina * 100) : 100}%`,
-                                    background: 'linear-gradient(90deg, #4dabf7, #74c0fc)'
-                                }}
-                            ></div>
-                        </div>
-                    </div>
-                    <div className="player-status-mini">
-                        <div className="mini-name" style={{color: '#4dabf7'}}>🔵 玩家2</div>
-                        <div className="mini-hp">
-                            <div
-                                className="mini-hp-fill"
-                                style={{
-                                    width: `${gameRef.current.player2 ? (gameRef.current.player2.hp / gameRef.current.player2.maxHp * 100) : 100}%`,
-                                    background: 'linear-gradient(90deg, #ff6b6b, #ff8787)'
-                                }}
-                            ></div>
-                        </div>
-                        <div className="mini-stamina">
-                            <div
-                                className="mini-stamina-fill"
-                                style={{
-                                    width: `${gameRef.current.player2 ? (gameRef.current.player2.stamina / gameRef.current.player2.maxStamina * 100) : 100}%`,
-                                    background: 'linear-gradient(90deg, #4dabf7, #74c0fc)'
-                                }}
-                            ></div>
-                        </div>
-                    </div>
-                </div>
-
-                {combo.show && (
-                    <div className="combo-indicator show">{combo.text}</div>
-                )}
-
-                {weaponStatus.show && (
-                    <div className="weapon-status show">{weaponStatus.text}</div>
-                )}
-
-                {modeIndicator.show && (
-                    <div className="mode-indicator">{modeIndicator.text}</div>
-                )}
-
-                <div className="canvas-container">
-                    {/* 触摸提示 - 仅在移动端显示 */}
-                    {isMobile && !gameState.gameOver && (
-                        <div className="touch-hint">
-                            <div className="touch-hint-left">
-                                <div>👆 点击上半屏 - 攻击</div>
-                                <div>👇 点击下半屏 - 防御</div>
-                                <div>↔️ 左右滑动 - 移动</div>
-                                <div>⬆️ 向上滑 - 跳跃</div>
-                            </div>
-                            <div className="touch-hint-right">
-                                <div>👆 点击上半屏 - 攻击</div>
-                                <div>👇 点击下半屏 - 防御</div>
-                                <div>↔️ 左右滑动 - 移动</div>
-                                <div>⬆️ 向上滑 - 跳跃</div>
+                                <div className="loading-text">{progress}%</div>
+                                <div className="sprite-status">
+                                    {Object.entries(spriteStatus).map(([action, status]) => (
+                                        <div key={action} className={`status-item ${status}`}>
+                                            {action}: {status === 'loaded' ? '✅' : status === 'failed' ? '❌' : '⏳'}
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     )}
 
-                    {/* 中心分割线 - 视觉指示 */}
-                    {!gameState.gameOver && (
-                        <div className="center-divider"></div>
-                    )}
-
-                    <canvas
-                        ref={canvasRef}
-                        width={800}
-                        height={500}
-                        style={{
-                            width: '100%',
-                            height: '100%',
-                            borderRadius: '8px',
-                            background: 'linear-gradient(180deg, #87CEEB 0%, #E0F6FF 50%, #90EE90 50%, #228B22 100%)',
-                            boxShadow: '0 0 20px rgba(0, 0, 0, 0.3)',
-                            touchAction: 'none'
-                        }}
-                    />
-
-                    {gameState.gameOver && (
-                        <div className="game-over-overlay show">
-                            <div className="winner-text">{gameState.winner} 获胜!</div>
-                            <button className="reset-btn" onClick={handleReset}>🔄 再战一局</button>
+                    {/* 精灵加载失败提示 */}
+                    {error && !loading && (
+                        <div className="notification show" style={{background: 'rgba(255, 100, 100, 0.9)'}}>
+                            {error}
                         </div>
                     )}
-                </div>
 
-                <div className="bottom-controls">
-                    <button className="func-btn fullscreen" onClick={handleFullscreen}>🖥️ 全屏</button>
-                    <button
-                        className="func-btn"
-                        onClick={handlePause}
-                        style={gameState.paused ? {background: 'rgba(255, 200, 100, 0.5)'} : {}}
-                    >⏸️ 暂停</button>
-                    <button
-                        className="func-btn warning"
-                        onClick={handleAI}
-                        style={gameState.aiEnabled ? {background: 'rgba(255, 200, 100, 0.6)'} : {}}
-                    >🤖 AI</button>
-                    <button
-                        className="func-btn danger"
-                        onClick={handleHardcore}
-                        style={gameState.hardcoreMode ? {background: 'rgba(255, 100, 100, 0.6)'} : {}}
-                    >💀 硬核</button>
-                    <button
-                        className="func-btn warning"
-                        onClick={handleSurvival}
-                        style={survivalMode ? {background: 'rgba(255, 165, 0, 0.6)'} : {}}
-                    >🎯 生存</button>
-                    <button className="func-btn" onClick={handleReset}>🔄 重置</button>
-                    <button className="func-btn" onClick={handleWeapons}>⚔️ 武器</button>
-                    <button className="func-btn" onClick={() => setShowHelp(true)}>❓ 帮助</button>
-                    <button className="func-btn" onClick={() => {
-                        const newSoundState = toggleSound();
-                        showNotification(newSoundState ? '🔊 音效开启' : '🔇 音效关闭', 1000);
-                    }}>{soundEnabled ? '🔊' : '🔇'}</button>
-                    {!gameRef.current.player1 && (
-                        <button className="func-btn" onClick={handleStart} style={{background: 'rgba(0, 255, 100, 0.3)', borderColor: 'rgba(0, 255, 100, 0.6)'}}>▶️ 开始</button>
-                    )}
-                </div>
-            </div>
-
-            <div className="control-panel-right">
-                <div className="player-label p2">🔵 玩家2</div>
-                <div className="control-row">
-                    <button
-                        className={`btn jump ${keys['arrowup'] ? 'active' : ''}`}
-                        onTouchStart={() => handleTouchStart('arrowup')}
-                        onTouchEnd={() => handleTouchEnd('arrowup')}
-                        onMouseDown={() => handleTouchStart('arrowup')}
-                        onMouseUp={() => handleTouchEnd('arrowup')}
-                        onMouseLeave={() => handleTouchEnd('arrowup')}
-                    >↑</button>
-                </div>
-                <div className="control-row" style={{display: 'flex', gap: '5px'}}>
-                    <button
-                        className={`btn move ${keys['arrowleft'] ? 'active' : ''}`}
-                        onTouchStart={() => handleTouchStart('arrowleft')}
-                        onTouchEnd={() => handleTouchEnd('arrowleft')}
-                        onMouseDown={() => handleTouchStart('arrowleft')}
-                        onMouseUp={() => handleTouchEnd('arrowleft')}
-                        onMouseLeave={() => handleTouchEnd('arrowleft')}
-                    >←</button>
-                    <button
-                        className={`btn move ${keys['arrowright'] ? 'active' : ''}`}
-                        onTouchStart={() => handleTouchStart('arrowright')}
-                        onTouchEnd={() => handleTouchEnd('arrowright')}
-                        onMouseDown={() => handleTouchStart('arrowright')}
-                        onMouseUp={() => handleTouchEnd('arrowright')}
-                        onMouseLeave={() => handleTouchEnd('arrowright')}
-                    >→</button>
-                </div>
-                <div className="control-row">
-                    <button
-                        className={`btn attack ${keys['j'] ? 'active' : ''}`}
-                        onTouchStart={() => handleTouchStart('j')}
-                        onTouchEnd={() => handleTouchEnd('j')}
-                        onMouseDown={() => handleTouchStart('j')}
-                        onMouseUp={() => handleTouchEnd('j')}
-                        onMouseLeave={() => handleTouchEnd('j')}
-                    >👊</button>
-                </div>
-                <div className="control-row">
-                    <button
-                        className={`btn attack ${keys['k'] ? 'active' : ''}`}
-                        onTouchStart={() => handleTouchStart('k')}
-                        onTouchEnd={() => handleTouchEnd('k')}
-                        onMouseDown={() => handleTouchStart('k')}
-                        onMouseUp={() => handleTouchEnd('k')}
-                        onMouseLeave={() => handleTouchEnd('k')}
-                    >🦶</button>
-                </div>
-            </div>
-
-            {notification.show && (
-                <div className="notification show" style={{whiteSpace: 'pre-line'}}>
-                    {notification.message}
-                </div>
-            )}
-
-            {showHelp && (
-                <div className="game-over-overlay show" onClick={() => setShowHelp(false)}>
-                    <div
-                        className="winner-text"
-                        style={{fontSize: '1.5em', cursor: 'pointer'}}
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        🎮 游戏帮助<br/><br/>
-                        <div style={{fontSize: '0.6em', textAlign: 'left', maxWidth: '600px', lineHeight: '1.6'}}>
-                            <strong>🎮 控制方式:</strong><br/>
-                            <strong>键盘:</strong> 玩家1 WASD + 空格/S | 玩家2 方向键 + J/K<br/>
-                            <strong>触屏滑动:</strong> 屏幕左右分半，每半控制一个玩家<br/>
-                            • 上半屏点击 = 攻击<br/>
-                            • 下半屏点击 = 防御<br/>
-                            • 左右滑动 = 移动<br/>
-                            • 向上滑动 = 跳跃<br/><br/>
-
-                            <strong>新增武器 (10种):</strong><br/>
-                            🔥火焰剑 ⚡闪电锤 🧊冰霜弓 💎钻石匕首<br/>
-                            🪓战斧 🎯回旋镖 ⚔️圣剑 🗡️毒匕首 🔨雷神锤 ✨光剑<br/><br/>
-
-                            <strong>高级动作:</strong><br/>
-                            💥蓄力攻击 - 长按攻击键<br/>
-                            🌀翻滚攻击 - 随机触发<br/>
-                            ⚡连击系统 - 连续攻击加成<br/><br/>
-
-                            <strong>功能按钮:</strong><br/>
-                            全屏 | 暂停 | AI模式 | 硬核模式 | 生存模式 | 重置 | 武器说明 | 帮助 | 音效开关<br/><br/>
-
-                            <strong>游戏模式:</strong><br/>
-                            💀硬核 - 50HP, 双倍伤害<br/>
-                            🎯生存 - AI无限复活，越战越强<br/><br/>
-
-                            <strong>精灵动画:</strong><br/>
-                            ✅ 已加载: idle, walk, run, attack_slash, hurt, victory<br/>
-                            💡 自动使用，未加载时回退到程序化绘制<br/><br/>
-
-                            <strong>点击任意处关闭</strong>
+                    <div className="control-panel-left">
+                        <div className="player-label p1">🔴 玩家1</div>
+                        <div className="control-row">
+                            <button
+                                className={`btn jump ${keys['w'] ? 'active' : ''}`}
+                                onTouchStart={() => handleTouchStart('w')}
+                                onTouchEnd={() => handleTouchEnd('w')}
+                                onMouseDown={() => handleTouchStart('w')}
+                                onMouseUp={() => handleTouchEnd('w')}
+                                onMouseLeave={() => handleTouchEnd('w')}
+                            >W</button>
+                        </div>
+                        <div className="control-row" style={{display: 'flex', gap: '5px'}}>
+                            <button
+                                className={`btn move ${keys['a'] ? 'active' : ''}`}
+                                onTouchStart={() => handleTouchStart('a')}
+                                onTouchEnd={() => handleTouchEnd('a')}
+                                onMouseDown={() => handleTouchStart('a')}
+                                onMouseUp={() => handleTouchEnd('a')}
+                                onMouseLeave={() => handleTouchEnd('a')}
+                            >A</button>
+                            <button
+                                className={`btn move ${keys['d'] ? 'active' : ''}`}
+                                onTouchStart={() => handleTouchStart('d')}
+                                onTouchEnd={() => handleTouchEnd('d')}
+                                onMouseDown={() => handleTouchStart('d')}
+                                onMouseUp={() => handleTouchEnd('d')}
+                                onMouseLeave={() => handleTouchEnd('d')}
+                            >D</button>
+                        </div>
+                        <div className="control-row">
+                            <button
+                                className={`btn attack ${keys[' '] ? 'active' : ''}`}
+                                onTouchStart={() => handleTouchStart(' ')}
+                                onTouchEnd={() => handleTouchEnd(' ')}
+                                onMouseDown={() => handleTouchStart(' ')}
+                                onMouseUp={() => handleTouchEnd(' ')}
+                                onMouseLeave={() => handleTouchEnd(' ')}
+                            >👊</button>
+                        </div>
+                        <div className="control-row">
+                            <button
+                                className={`btn attack ${keys['s'] ? 'active' : ''}`}
+                                onTouchStart={() => handleTouchStart('s')}
+                                onTouchEnd={() => handleTouchEnd('s')}
+                                onMouseDown={() => handleTouchStart('s')}
+                                onMouseUp={() => handleTouchEnd('s')}
+                                onMouseLeave={() => handleTouchEnd('s')}
+                            >🛡️</button>
                         </div>
                     </div>
-                </div>
+
+                    <div style={{flex: 1, display: 'flex', flexDirection: 'column', height: '100%', position: 'relative'}}>
+                        <div className="status-bar-top">
+                            <div className="player-status-mini">
+                                <div className="mini-name" style={{color: '#ff6b6b'}}>🔴 玩家1</div>
+                                <div className="mini-hp">
+                                    <div
+                                        className="mini-hp-fill"
+                                        style={{
+                                            width: `${gameRef.current.player1 ? (gameRef.current.player1.hp / gameRef.current.player1.maxHp * 100) : 100}%`,
+                                            background: 'linear-gradient(90deg, #ff6b6b, #ff8787)'
+                                        }}
+                                    ></div>
+                                </div>
+                                <div className="mini-stamina">
+                                    <div
+                                        className="mini-stamina-fill"
+                                        style={{
+                                            width: `${gameRef.current.player1 ? (gameRef.current.player1.stamina / gameRef.current.player1.maxStamina * 100) : 100}%`,
+                                            background: 'linear-gradient(90deg, #4dabf7, #74c0fc)'
+                                        }}
+                                    ></div>
+                                </div>
+                            </div>
+                            <div className="player-status-mini">
+                                <div className="mini-name" style={{color: '#4dabf7'}}>🔵 玩家2</div>
+                                <div className="mini-hp">
+                                    <div
+                                        className="mini-hp-fill"
+                                        style={{
+                                            width: `${gameRef.current.player2 ? (gameRef.current.player2.hp / gameRef.current.player2.maxHp * 100) : 100}%`,
+                                            background: 'linear-gradient(90deg, #ff6b6b, #ff8787)'
+                                        }}
+                                    ></div>
+                                </div>
+                                <div className="mini-stamina">
+                                    <div
+                                        className="mini-stamina-fill"
+                                        style={{
+                                            width: `${gameRef.current.player2 ? (gameRef.current.player2.stamina / gameRef.current.player2.maxStamina * 100) : 100}%`,
+                                            background: 'linear-gradient(90deg, #4dabf7, #74c0fc)'
+                                        }}
+                                    ></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {combo.show && (
+                            <div className="combo-indicator show">{combo.text}</div>
+                        )}
+
+                        {weaponStatus.show && (
+                            <div className="weapon-status show">{weaponStatus.text}</div>
+                        )}
+
+                        {modeIndicator.show && (
+                            <div className="mode-indicator">{modeIndicator.text}</div>
+                        )}
+
+                        <div className="canvas-container">
+                            {/* 触摸提示 - 仅在移动端显示 */}
+                            {isMobile && !gameState.gameOver && (
+                                <div className="touch-hint">
+                                    <div className="touch-hint-left">
+                                        <div>👆 点击上半屏 - 攻击</div>
+                                        <div>👇 点击下半屏 - 防御</div>
+                                        <div>↔️ 左右滑动 - 移动</div>
+                                        <div>⬆️ 向上滑 - 跳跃</div>
+                                    </div>
+                                    <div className="touch-hint-right">
+                                        <div>👆 点击上半屏 - 攻击</div>
+                                        <div>👇 点击下半屏 - 防御</div>
+                                        <div>↔️ 左右滑动 - 移动</div>
+                                        <div>⬆️ 向上滑 - 跳跃</div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 中心分割线 - 视觉指示 */}
+                            {!gameState.gameOver && (
+                                <div className="center-divider"></div>
+                            )}
+
+                            <canvas
+                                ref={canvasRef}
+                                width={800}
+                                height={500}
+                                style={{
+                                    width: '100%',
+                                    height: '100%',
+                                    borderRadius: '8px',
+                                    background: 'linear-gradient(180deg, #87CEEB 0%, #E0F6FF 50%, #90EE90 50%, #228B22 100%)',
+                                    boxShadow: '0 0 20px rgba(0, 0, 0, 0.3)',
+                                    touchAction: 'none'
+                                }}
+                            />
+
+                            {gameState.gameOver && (
+                                <div className="game-over-overlay show">
+                                    <div className="winner-text">{gameState.winner} 获胜!</div>
+                                    <button className="reset-btn" onClick={handleReset}>🔄 再战一局</button>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="bottom-controls">
+                            <button className="func-btn fullscreen" onClick={handleFullscreen}>🖥️ 全屏</button>
+                            <button
+                                className="func-btn"
+                                onClick={handlePause}
+                                style={gameState.paused ? {background: 'rgba(255, 200, 100, 0.5)'} : {}}
+                            >⏸️ 暂停</button>
+                            <button
+                                className="func-btn warning"
+                                onClick={handleAI}
+                                style={gameState.aiEnabled ? {background: 'rgba(255, 200, 100, 0.6)'} : {}}
+                            >🤖 AI</button>
+                            <button
+                                className="func-btn danger"
+                                onClick={handleHardcore}
+                                style={gameState.hardcoreMode ? {background: 'rgba(255, 100, 100, 0.6)'} : {}}
+                            >💀 硬核</button>
+                            <button
+                                className="func-btn warning"
+                                onClick={handleSurvival}
+                                style={survivalMode ? {background: 'rgba(255, 165, 0, 0.6)'} : {}}
+                            >🎯 生存</button>
+                            <button className="func-btn" onClick={handleReset}>🔄 重置</button>
+                            <button className="func-btn" onClick={handleWeapons}>⚔️ 武器</button>
+                            <button className="func-btn" onClick={() => setShowHelp(true)}>❓ 帮助</button>
+                            <button className="func-btn" onClick={() => {
+                                const newSoundState = toggleSound();
+                                showNotification(newSoundState ? '🔊 音效开启' : '🔇 音效关闭', 1000);
+                            }}>{soundEnabled ? '🔊' : '🔇'}</button>
+                        </div>
+                    </div>
+
+                    <div className="control-panel-right">
+                        <div className="player-label p2">🔵 玩家2</div>
+                        <div className="control-row">
+                            <button
+                                className={`btn jump ${keys['arrowup'] ? 'active' : ''}`}
+                                onTouchStart={() => handleTouchStart('arrowup')}
+                                onTouchEnd={() => handleTouchEnd('arrowup')}
+                                onMouseDown={() => handleTouchStart('arrowup')}
+                                onMouseUp={() => handleTouchEnd('arrowup')}
+                                onMouseLeave={() => handleTouchEnd('arrowup')}
+                            >↑</button>
+                        </div>
+                        <div className="control-row" style={{display: 'flex', gap: '5px'}}>
+                            <button
+                                className={`btn move ${keys['arrowleft'] ? 'active' : ''}`}
+                                onTouchStart={() => handleTouchStart('arrowleft')}
+                                onTouchEnd={() => handleTouchEnd('arrowleft')}
+                                onMouseDown={() => handleTouchStart('arrowleft')}
+                                onMouseUp={() => handleTouchEnd('arrowleft')}
+                                onMouseLeave={() => handleTouchEnd('arrowleft')}
+                            >←</button>
+                            <button
+                                className={`btn move ${keys['arrowright'] ? 'active' : ''}`}
+                                onTouchStart={() => handleTouchStart('arrowright')}
+                                onTouchEnd={() => handleTouchEnd('arrowright')}
+                                onMouseDown={() => handleTouchStart('arrowright')}
+                                onMouseUp={() => handleTouchEnd('arrowright')}
+                                onMouseLeave={() => handleTouchEnd('arrowright')}
+                            >→</button>
+                        </div>
+                        <div className="control-row">
+                            <button
+                                className={`btn attack ${keys['j'] ? 'active' : ''}`}
+                                onTouchStart={() => handleTouchStart('j')}
+                                onTouchEnd={() => handleTouchEnd('j')}
+                                onMouseDown={() => handleTouchStart('j')}
+                                onMouseUp={() => handleTouchEnd('j')}
+                                onMouseLeave={() => handleTouchEnd('j')}
+                            >👊</button>
+                        </div>
+                        <div className="control-row">
+                            <button
+                                className={`btn attack ${keys['k'] ? 'active' : ''}`}
+                                onTouchStart={() => handleTouchStart('k')}
+                                onTouchEnd={() => handleTouchEnd('k')}
+                                onMouseDown={() => handleTouchStart('k')}
+                                onMouseUp={() => handleTouchEnd('k')}
+                                onMouseLeave={() => handleTouchEnd('k')}
+                            >🦶</button>
+                        </div>
+                    </div>
+
+                    {notification.show && (
+                        <div className="notification show" style={{whiteSpace: 'pre-line'}}>
+                            {notification.message}
+                        </div>
+                    )}
+
+                    {showHelp && (
+                        <div className="game-over-overlay show" onClick={() => setShowHelp(false)}>
+                            <div
+                                className="winner-text"
+                                style={{fontSize: '1.5em', cursor: 'pointer'}}
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                🎮 游戏帮助<br/><br/>
+                                <div style={{fontSize: '0.6em', textAlign: 'left', maxWidth: '600px', lineHeight: '1.6'}}>
+                                    <strong>🎮 控制方式:</strong><br/>
+                                    <strong>键盘:</strong> 玩家1 WASD + 空格/S | 玩家2 方向键 + J/K<br/>
+                                    <strong>触屏滑动:</strong> 屏幕左右分半，每半控制一个玩家<br/>
+                                    • 上半屏点击 = 攻击<br/>
+                                    • 下半屏点击 = 防御<br/>
+                                    • 左右滑动 = 移动<br/>
+                                    • 向上滑动 = 跳跃<br/><br/>
+
+                                    <strong>新增武器 (10种):</strong><br/>
+                                    🔥火焰剑 ⚡闪电锤 🧊冰霜弓 💎钻石匕首<br/>
+                                    🪓战斧 🎯回旋镖 ⚔️圣剑 🗡️毒匕首 🔨雷神锤 ✨光剑<br/><br/>
+
+                                    <strong>高级动作:</strong><br/>
+                                    💥蓄力攻击 - 长按攻击键<br/>
+                                    🌀翻滚攻击 - 随机触发<br/>
+                                    ⚡连击系统 - 连续攻击加成<br/><br/>
+
+                                    <strong>功能按钮:</strong><br/>
+                                    全屏 | 暂停 | AI模式 | 硬核模式 | 生存模式 | 重置 | 武器说明 | 帮助 | 音效开关<br/><br/>
+
+                                    <strong>游戏模式:</strong><br/>
+                                    💀硬核 - 50HP, 双倍伤害<br/>
+                                    🎯生存 - AI无限复活，越战越强<br/><br/>
+
+                                    <strong>精灵动画:</strong><br/>
+                                    ✅ 已加载: idle, walk, run, attack_slash, hurt, victory<br/>
+                                    💡 自动使用，未加载时回退到程序化绘制<br/><br/>
+
+                                    <strong>点击任意处关闭</strong>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </>
             )}
         </div>
     );

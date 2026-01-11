@@ -16,6 +16,7 @@ export class SpriteStickman extends Stickman {
         this.useSpriteAnimation = false;
 
         // 动作映射：游戏状态 -> 精灵动作
+        // 注意：如果某个动作的精灵图不存在，会自动回退到程序化绘制
         this.actionMap = {
             idle: 'idle',
             walking: 'walk',
@@ -23,17 +24,28 @@ export class SpriteStickman extends Stickman {
             attacking: 'attack_slash',
             hurt: 'hurt',
             victory: 'victory',
-            jumping: 'idle', // 跳跃使用idle但有垂直偏移
-            crouching: 'idle', // 下蹲使用idle但有垂直偏移
-            rolling: 'run', // 翻滚使用run
-            charging: 'idle' // 蓄力使用idle
+            jumping: 'idle',     // 跳跃使用idle，但有垂直偏移
+            crouching: 'idle',   // 下蹲使用idle，但有垂直偏移
+            rolling: 'run',      // 翻滚使用run（如果没有专用翻滚动画）
+            charging: 'idle'     // 蓄力使用idle
         };
     }
 
     // 检查精灵动画是否可用
     checkSpriteAvailability() {
-        this.useSpriteAnimation = spriteAnimation.isLoaded(this.currentAction);
-        return this.useSpriteAnimation;
+        // 检查关键动作是否已加载（idle, run, attack_slash, victory）
+        const requiredActions = ['idle', 'run', 'attack_slash', 'victory'];
+        const loadedActions = requiredActions.filter(action => spriteAnimation.isLoaded(action));
+
+        // 如果至少有idle和victory，就启用精灵动画
+        if (loadedActions.length >= 2) {
+            this.useSpriteAnimation = true;
+            return true;
+        }
+
+        // 否则禁用精灵动画
+        this.useSpriteAnimation = false;
+        return false;
     }
 
     // 根据当前状态确定动作
@@ -155,13 +167,92 @@ export class SpriteStickman extends Stickman {
             ctx.stroke();
         }
 
-        // 计算绘制位置（考虑状态偏移）
+        // 计算绘制位置
         let drawX = this.x;
         let drawY = this.y;
         let drawWidth = this.width;
         let drawHeight = this.height;
 
-        // 翻滚特效
+        // 状态调整：跳跃、下蹲、受伤时的位置偏移
+        if (this.isCrouching) {
+            drawY += 15;
+            drawHeight -= 15;
+        }
+        if (this.hurtAnimation > 0) {
+            drawY += 5;
+        }
+        if (this.isJumping) {
+            drawY -= 5;
+        }
+
+        // 胜利特效（在精灵图下方绘制）
+        if (this.isVictory) {
+            ctx.save();
+            ctx.globalAlpha = 0.8;
+            ctx.strokeStyle = '#ffd93d';
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#ffd93d';
+
+            // 胜利光环
+            const radius = 20 + (this.victoryFrame || 0) * 3;
+            ctx.beginPath();
+            ctx.arc(this.x + this.width/2, this.y + 30, radius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // 胜利星星
+            const starX = this.x + this.width/2 + ((this.victoryFrame || 0) % 2 === 0 ? 15 : -15);
+            const starY = this.y - 10;
+            ctx.fillStyle = '#ffd93d';
+            ctx.beginPath();
+            ctx.moveTo(starX, starY - 5);
+            ctx.lineTo(starX + 2, starY - 1);
+            ctx.lineTo(starX + 6, starY);
+            ctx.lineTo(starX + 2, starY + 1);
+            ctx.lineTo(starX, starY + 5);
+            ctx.lineTo(starX - 2, starY + 1);
+            ctx.lineTo(starX - 6, starY);
+            ctx.lineTo(starX - 2, starY - 1);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+
+        // 精灵图绘制
+        const hasCurrentActionSprite = spriteAnimation.isLoaded(this.currentAction);
+        let spriteDrawn = false;
+
+        if (hasCurrentActionSprite) {
+            spriteDrawn = spriteAnimation.draw(
+                ctx,
+                this.currentAction,
+                drawX,
+                drawY,
+                drawWidth,
+                drawHeight,
+                this.currentFrame
+            );
+        }
+
+        // 如果当前动作没有精灵图，或者绘制失败，回退到程序化绘制
+        if (!spriteDrawn) {
+            super.draw(ctx);
+        }
+
+        // 绘制额外特效（在精灵图之上）
+        this.drawExtraEffects(ctx);
+
+        // 血条和体力条
+        this.drawBars(ctx, drawY);
+
+        // 武器图标
+        if (this.weapon && !this.isAttacking && this.attackFrame === 0) {
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(this.weapon.emoji, this.x + this.width/2, drawY - 15);
+        }
+
+        // 翻滚特效（额外视觉效果）
         if (this.isRolling) {
             ctx.save();
             ctx.globalAlpha = 0.7;
@@ -172,13 +263,9 @@ export class SpriteStickman extends Stickman {
             ctx.arc(this.x + this.width/2, this.y + 30, 15, 0, Math.PI * 2);
             ctx.fill();
             ctx.restore();
-
-            // 翻滚时稍微放大
-            drawY += 20;
-            drawHeight -= 20;
         }
 
-        // 蓄力特效
+        // 蓄力特效（额外视觉效果）
         if (this.isCharging) {
             ctx.save();
             const chargeAlpha = Math.min(this.chargeAttack / 60, 1);
@@ -191,47 +278,6 @@ export class SpriteStickman extends Stickman {
             ctx.arc(this.x + this.width/2, this.y + 30, 10 + this.chargeAttack / 3, 0, Math.PI * 2);
             ctx.stroke();
             ctx.restore();
-        }
-
-        // 下蹲调整
-        if (this.isCrouching) {
-            drawY += 15;
-            drawHeight -= 15;
-        }
-
-        // 受伤调整
-        if (this.hurtAnimation > 0) {
-            drawY += 5;
-        }
-
-        // 跳跃调整（精灵图中不体现，通过位置偏移）
-        // 精灵图绘制
-        const spriteDrawn = spriteAnimation.draw(
-            ctx,
-            this.currentAction,
-            drawX - 5, // 微调位置
-            drawY - 5,
-            drawWidth + 10,
-            drawHeight + 10,
-            this.currentFrame
-        );
-
-        // 如果精灵绘制失败，回退到程序化绘制
-        if (!spriteDrawn) {
-            super.draw(ctx);
-        }
-
-        // 绘制额外特效（这些保持不变）
-        this.drawExtraEffects(ctx);
-
-        // 血条和体力条
-        this.drawBars(ctx, drawY);
-
-        // 武器图标
-        if (this.weapon && !this.isAttacking && this.attackFrame === 0) {
-            ctx.font = '16px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText(this.weapon.emoji, this.x + this.width/2, drawY - 15);
         }
 
         ctx.restore();
@@ -264,8 +310,36 @@ export class SpriteStickman extends Stickman {
         // 调用父类update
         super.update(keys, opponent);
 
-        // 更新精灵动画
+        // 更新精灵动画（包括胜利动画）
         this.updateAnimation(deltaTime);
+    }
+
+    // 重写胜利动画更新，支持精灵动画
+    updateVictoryAnimation() {
+        if (this.isVictory) {
+            this.victoryTimer++;
+            this.victoryFrame = Math.floor(this.victoryTimer / 5) % 4;
+
+            // 如果使用精灵动画，确保当前动作是victory
+            if (this.useSpriteAnimation && this.currentAction !== 'victory') {
+                this.currentAction = 'victory';
+                this.currentFrame = 0;
+                this.animationTimer = 0;
+            }
+
+            // 更新精灵动画帧（如果使用精灵）
+            if (this.useSpriteAnimation) {
+                this.animationTimer += 16; // 假设60fps
+                while (this.animationTimer >= this.frameDuration) {
+                    this.animationTimer -= this.frameDuration;
+                    this.currentFrame++;
+                    const frameCount = spriteAnimation.getFrameCount('victory');
+                    if (frameCount > 0 && this.currentFrame >= frameCount) {
+                        this.currentFrame = 0; // 循环
+                    }
+                }
+            }
+        }
     }
 
     // 获取当前动作信息（用于调试）
@@ -277,5 +351,15 @@ export class SpriteStickman extends Stickman {
             duration: this.frameDuration,
             useSprites: this.useSpriteAnimation
         };
+    }
+
+    // 设置胜利动画
+    setVictoryAnimation() {
+        this.isVictory = true;
+        this.currentAction = 'victory';
+        this.currentFrame = 0;
+        this.animationTimer = 0;
+        const fps = spriteAnimation.getFPS('victory') || 12;
+        this.frameDuration = 1000 / fps;
     }
 }

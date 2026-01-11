@@ -1,0 +1,93 @@
+================================================================================
+                    夸张火柴人动画 - 快速开始
+================================================================================
+
+【1. 安装依赖】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+pip install Pillow
+
+【2. 生成PNG序列】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+python generate_exaggerated_sprites.py
+
+输出: sprite_assets/ (6个文件夹，每个动作的PNG序列)
+
+【3. 生成精灵表】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+python create_sprite_sheets.py
+
+输出: public/sprites/ (6个PNG + 6个JSON)
+
+【4. 集成到游戏】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+在 App.jsx 中:
+
+import { ExaggeratedStickman } from './classes/ExaggeratedStickman.js';
+import { useExaggeratedSprites } from './hooks/useExaggeratedSprites.js';
+
+// 添加Hook
+const { loading, progress } = useExaggeratedSprites();
+
+// 使用ExaggeratedStickman替代Stickman
+player1 = new ExaggeratedStickman(x, y, color, controls, 1, w, h);
+
+// 传递deltaTime
+player1.update(keys, opponent, deltaTime);
+
+================================================================================
+【效果对比】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+传统:  腰站直，动作小，僵硬
+夸张:  手臂大摆动，身体倾斜，震动，拖影，冲击波
+
+【动作幅度】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+行走:  ±20° → ±35°
+奔跑:  身体前倾15°
+攻击:  大范围挥砍 + 冲击波
+受伤:  后仰25° + 眩晕星星
+胜利:  跳跃15px + 双手高举 + 星星
+
+【文件说明】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+生成工具:
+  generate_exaggerated_sprites.py    # 用Pillow生成夸张PNG序列
+  create_sprite_sheets.py            # 合并为精灵表
+
+集成文件:
+  src/classes/ExaggeratedSpriteAnimation.js  # 动画管理器
+  src/classes/ExaggeratedStickman.js         # 夸张玩家类
+  src/hooks/useExaggeratedSprites.js         # React Hook
+
+文档:
+  夸张火柴人动画指南.md              # 完整文档
+  QUICK_START.txt                    # 本文件
+
+【常见问题】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Q: 没有Pillow?
+A: pip install Pillow
+
+Q: 生成的文件在哪?
+A: sprite_assets/ (输入) 和 public/sprites/ (输出)
+
+Q: 可以调整夸张程度吗?
+A: 可以，在ExaggeratedSpriteAnimation.js修改enhancement参数
+
+Q: 会自动回退吗?
+A: 是的，无资源时自动使用程序化绘制
+
+【下一步】
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. 运行: python generate_exaggerated_sprites.py
+2. 运行: python create_sprite_sheets.py
+3. 检查: public/sprites/ 目录
+4. 集成: 按照 夸张火柴人动画指南.md
+5. 运行: npm run dev
+
+================================================================================

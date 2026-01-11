@@ -13,8 +13,8 @@ export class Stickman {
 
         this.vx = 0;
         this.vy = 0;
-        this.width = 30;
-        this.height = 60;
+        this.width = 45;
+        this.height = 90;
         this.speed = 4;
         this.jumpPower = 12;
         this.gravity = 0.6;
@@ -77,6 +77,14 @@ export class Stickman {
     }
 
     update(keys, opponent) {
+        // 更新胜利动画
+        if (this.isVictory) {
+            this.updateVictoryAnimation();
+            // 胜利状态下只更新特效和动画，不进行其他更新
+            this.updateEffects();
+            return;
+        }
+
         // 更新燃烧伤害
         if (this.burnTimer > 0) {
             this.burnTimer--;
@@ -891,6 +899,38 @@ export class Stickman {
             ctx.restore();
         }
 
+        // 胜利特效
+        if (this.isVictory) {
+            ctx.save();
+            ctx.globalAlpha = 0.8;
+            ctx.strokeStyle = '#ffd93d';
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = '#ffd93d';
+
+            // 胜利光环
+            const radius = 20 + this.victoryFrame * 3;
+            ctx.beginPath();
+            ctx.arc(this.x + this.width/2, this.y + 30, radius, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // 胜利星星
+            const starX = this.x + this.width/2 + (this.victoryFrame % 2 === 0 ? 15 : -15);
+            const starY = this.y - 10;
+            ctx.beginPath();
+            ctx.moveTo(starX, starY - 5);
+            ctx.lineTo(starX + 2, starY - 1);
+            ctx.lineTo(starX + 6, starY);
+            ctx.lineTo(starX + 2, starY + 1);
+            ctx.lineTo(starX, starY + 5);
+            ctx.lineTo(starX - 2, starY + 1);
+            ctx.lineTo(starX - 6, starY);
+            ctx.lineTo(starX - 2, starY - 1);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+        }
+
         // 状态效果
         if (this.burnTimer > 0) {
             ctx.shadowBlur = 20;
@@ -918,30 +958,33 @@ export class Stickman {
         let armOffset = this.isAttacking ? 10 : 5;
         let armHeight = 22;
 
+        // 胜利姿势
+        if (this.isVictory) {
+            bodyY = this.y;
+            legOffset = 5; // 稍微分开的站姿
+            armHeight = 15; // 手臂举起
+            armOffset = 15; // 双手张开
+        }
         // 下蹲
-        if (this.isCrouching) {
+        else if (this.isCrouching) {
             bodyY = this.y + 15;
             legOffset = 4;
         }
-
         // 受伤
-        if (this.hurtAnimation > 0) {
+        else if (this.hurtAnimation > 0) {
             bodyY += 5;
         }
-
         // 跳跃
-        if (this.isJumping) {
+        else if (this.isJumping) {
             legOffset = 12;
         }
-
         // 翻滚
-        if (this.isRolling) {
+        else if (this.isRolling) {
             bodyY = this.y + 20;
             legOffset = 0;
         }
-
         // 攻击类型特定姿势
-        if (this.isAttacking) {
+        else if (this.isAttacking) {
             if (this.attackType === 'kick') {
                 legOffset = 15; // 踢腿
             } else if (this.attackType === 'uppercut') {
@@ -963,7 +1006,15 @@ export class Stickman {
 
         // 手臂
         ctx.beginPath();
-        if (this.controls.attack === 'a') {
+        if (this.isVictory) {
+            // 胜利姿势 - 双臂举起
+            // 左臂
+            ctx.moveTo(this.x + this.width/2, bodyY + armHeight);
+            ctx.lineTo(this.x + this.width/2 - armOffset, bodyY + 15);
+            // 右臂
+            ctx.moveTo(this.x + this.width/2, bodyY + armHeight);
+            ctx.lineTo(this.x + this.width/2 + armOffset, bodyY + 15);
+        } else if (this.controls.attack === 'a') {
             // 玩家1（红色）- 左手攻击
             ctx.moveTo(this.x + this.width/2, bodyY + armHeight);
             ctx.lineTo(this.x + this.width/2 - armOffset, bodyY + 30);
@@ -1084,5 +1135,21 @@ export class Stickman {
         this.specialEffects.forEach(effect => {
             effect.draw(ctx);
         });
+    }
+
+    // 设置胜利动画（用于程序化绘制的胜利状态）
+    setVictoryAnimation() {
+        // 设置胜利状态标志
+        this.isVictory = true;
+        this.victoryFrame = 0;
+        this.victoryTimer = 0;
+    }
+
+    // 更新胜利动画（程序化绘制版本）
+    updateVictoryAnimation() {
+        if (this.isVictory) {
+            this.victoryTimer++;
+            this.victoryFrame = Math.floor(this.victoryTimer / 5) % 4; // 4帧循环
+        }
     }
 }

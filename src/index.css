@@ -1371,3 +1371,102 @@ body {
         font-size: 0.8em;
     }
 }
+
+/* 开始界面样式 */
+.start-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+}
+
+.start-content {
+    text-align: center;
+    padding: 40px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 20px;
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    animation: slideUp 0.5s ease;
+}
+
+.game-title {
+    font-size: 3em;
+    margin-bottom: 10px;
+    background: linear-gradient(45deg, #ff6b6b, #4dabf7, #ffd93d);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-shadow: 0 0 30px rgba(255, 107, 107, 0.5);
+    animation: glow 2s ease-in-out infinite;
+}
+
+.game-subtitle {
+    font-size: 1.2em;
+    color: #aaa;
+    margin-bottom: 30px;
+    letter-spacing: 2px;
+}
+
+.start-button {
+    padding: 15px 50px;
+    font-size: 1.5em;
+    font-weight: bold;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50px;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.3s ease;
+    box-shadow: 0 0 20px rgba(102, 126, 234, 0.5);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.start-button:hover {
+    transform: scale(1.05);
+    filter: brightness(1.2);
+    box-shadow: 0 0 30px rgba(102, 126, 234, 0.8);
+}
+
+.start-button:active {
+    transform: scale(0.98);
+}
+
+.loading-hint {
+    margin-top: 20px;
+    font-size: 0.9em;
+    color: #666;
+    font-style: italic;
+}
+
+/* 移动端开始界面适配 */
+@media (max-width: 768px) {
+    .start-content {
+        padding: 20px;
+        width: 90%;
+    }
+
+    .game-title {
+        font-size: 2em;
+    }
+
+    .game-subtitle {
+        font-size: 0.9em;
+    }
+
+    .start-button {
+        padding: 12px 40px;
+        font-size: 1.2em;
+    }
+
+    .loading-hint {
+        font-size: 0.75em;
+    }
+}

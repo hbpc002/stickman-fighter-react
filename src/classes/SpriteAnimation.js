@@ -106,11 +106,24 @@ export class SpriteAnimation {
         const currentFrame = frameIndex % frameCount;
         const sx = currentFrame * frameWidth;
 
+        // 精灵图是64x64正方形，角色是45x90矩形
+        // 优化策略：保持精灵图比例，让角色高度匹配，宽度居中
+        // 这样可以避免精灵图被拉伸变形
+
+        // 计算缩放比例：以高度为主，保持正方形比例
+        const scale = height / frameHeight;  // 基于高度缩放
+        const drawWidth = frameWidth * scale;
+        const drawHeight = height;
+
+        // 水平居中，让精灵图在角色框内居中显示
+        const drawX = x + (width - drawWidth) / 2;
+        const drawY = y;
+
         // 绘制精灵
         ctx.drawImage(
             image,
             sx, 0, frameWidth, frameHeight, // 源区域
-            x, y, width, height            // 目标区域
+            drawX, drawY, drawWidth, drawHeight // 目标区域
         );
 
         return true;
