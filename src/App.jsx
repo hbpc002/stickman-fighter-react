@@ -7,10 +7,12 @@ import {
     PoisonCloud, LightningBolt, LaserTrail, ComboEffect, SpecialAttackEffect
 } from './classes/VisualEffects.js';
 import { Stickman } from './classes/Stickman.js';
+import { SpriteStickman } from './classes/SpriteStickman.js';
 
 // 导入自定义Hooks
 import { useGameAudio } from './hooks/useGameAudio.js';
 import { useDeviceDetection } from './hooks/useDeviceDetection.js';
+import { useSpriteLoader } from './hooks/useSpriteLoader.js';
 
 // 导入工具函数
 import { resizeCanvas, drawBackground, drawWeapons, drawEffects, handleWeaponPickup } from './utils/gameUtils.js';
@@ -20,6 +22,9 @@ export default function App() {
     const canvasRef = useRef(null);
     const { soundEnabled, toggleSound } = useGameAudio();
     const { isMobile, showPortraitWarning } = useDeviceDetection();
+
+    // 精灵加载状态
+    const { loading, loaded, progress, error, spriteStatus } = useSpriteLoader();
 
     const [gameState, setGameState] = useState({
         gameOver: false,
@@ -58,7 +63,8 @@ export default function App() {
         },
         animationFrame: null,
         canvasWidth: 800,
-        canvasHeight: 500
+        canvasHeight: 500,
+        lastTime: 0
     });
 
     // 键盘事件处理
@@ -85,6 +91,184 @@ export default function App() {
         };
     }, []);
 
+    // 触摸/滑动手势处理 - 屏幕分为左右两半，每半控制一个玩家
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        const touchState = {
+            p1: { startX: 0, startY: 0, startTime: 0, active: false },
+            p2: { startX: 0, startY: 0, startTime: 0, active: false }
+        };
+
+        const SWIPE_THRESHOLD = 30; // 最小滑动距离
+        const TAP_THRESHOLD = 150; // 最大点击时间（毫秒）
+
+        const handleTouchStart = (e) => {
+            e.preventDefault();
+            const touches = e.touches;
+
+            for (let i = 0; i < touches.length; i++) {
+                const touch = touches[i];
+                const canvasRect = canvas.getBoundingClientRect();
+                const x = touch.clientX - canvasRect.left;
+                const canvasWidth = canvasRect.width;
+
+                // 屏幕左右分半：左半屏控制玩家1，右半屏控制玩家2
+                if (x < canvasWidth / 2) {
+                    touchState.p1 = {
+                        startX: touch.clientX,
+                        startY: touch.clientY,
+                        startTime: Date.now(),
+                        active: true,
+                        id: touch.identifier
+                    };
+                } else {
+                    touchState.p2 = {
+                        startX: touch.clientX,
+                        startY: touch.clientY,
+                        startTime: Date.now(),
+                        active: true,
+                        id: touch.identifier
+                    };
+                }
+            }
+        };
+
+        const handleTouchMove = (e) => {
+            e.preventDefault();
+            // 滑动过程中不需要实时处理，等待touchend
+        };
+
+        const handleTouchEnd = (e) => {
+            e.preventDefault();
+            const changedTouches = e.changedTouches;
+
+            for (let i = 0; i < changedTouches.length; i++) {
+                const touch = changedTouches[i];
+                const canvasRect = canvas.getBoundingClientRect();
+                const x = touch.clientX - canvasRect.left;
+                const y = touch.clientY - canvasRect.top;
+                const canvasWidth = canvasRect.width;
+                const canvasHeight = canvasRect.height;
+
+                // 确定是哪个玩家
+                let player;
+                if (x < canvasWidth / 2) {
+                    player = touchState.p1;
+                    if (player.id !== touch.identifier) continue;
+                    player.active = false;
+
+                    // 计算滑动向量
+                    const dx = touch.clientX - player.startX;
+                    const dy = touch.clientY - player.startY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    const duration = Date.now() - player.startTime;
+
+                    // 判断是滑动还是点击
+                    if (distance > SWIPE_THRESHOLD && duration < 1000) {
+                        // 滑动操作
+                        if (Math.abs(dx) > Math.abs(dy)) {
+                            // 水平滑动 - 移动
+                            if (dx > 0) {
+                                // 向右 - 玩家1向右
+                                setKeys(prev => ({ ...prev, 'd': true }));
+                                setTimeout(() => setKeys(prev => ({ ...prev, 'd': false })), 200);
+                            } else {
+                                // 向左 - 玩家1向左
+                                setKeys(prev => ({ ...prev, 'a': true }));
+                                setTimeout(() => setKeys(prev => ({ ...prev, 'a': false })), 200);
+                            }
+                        } else {
+                            // 垂直滑动 - 跳跃或防御
+                            if (dy < 0) {
+                                // 向上滑 - 跳跃
+                                setKeys(prev => ({ ...prev, 'w': true }));
+                                setTimeout(() => setKeys(prev => ({ ...prev, 'w': false })), 200);
+                            } else {
+                                // 向下滑 - 防御
+                                setKeys(prev => ({ ...prev, 's': true }));
+                                setTimeout(() => setKeys(prev => ({ ...prev, 's': false })), 300);
+                            }
+                        }
+                    } else if (duration < TAP_THRESHOLD) {
+                        // 点击操作 - 攻击
+                        // 检查是否点击在屏幕下半部分（防御区）还是上半部分（攻击区）
+                        if (y > canvasHeight / 2) {
+                            // 下半部分 - 防御
+                            setKeys(prev => ({ ...prev, 's': true }));
+                            setTimeout(() => setKeys(prev => ({ ...prev, 's': false })), 300);
+                        } else {
+                            // 上半部分 - 攻击
+                            setKeys(prev => ({ ...prev, ' ': true }));
+                            setTimeout(() => setKeys(prev => ({ ...prev, ' ': false })), 150);
+                        }
+                    }
+                } else {
+                    player = touchState.p2;
+                    if (player.id !== touch.identifier) continue;
+                    player.active = false;
+
+                    // 计算滑动向量
+                    const dx = touch.clientX - player.startX;
+                    const dy = touch.clientY - player.startY;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    const duration = Date.now() - player.startTime;
+
+                    // 判断是滑动还是点击
+                    if (distance > SWIPE_THRESHOLD && duration < 1000) {
+                        // 滑动操作
+                        if (Math.abs(dx) > Math.abs(dy)) {
+                            // 水平滑动 - 移动
+                            if (dx > 0) {
+                                // 向右 - 玩家2向右
+                                setKeys(prev => ({ ...prev, 'arrowright': true }));
+                                setTimeout(() => setKeys(prev => ({ ...prev, 'arrowright': false })), 200);
+                            } else {
+                                // 向左 - 玩家2向左
+                                setKeys(prev => ({ ...prev, 'arrowleft': true }));
+                                setTimeout(() => setKeys(prev => ({ ...prev, 'arrowleft': false })), 200);
+                            }
+                        } else {
+                            // 垂直滑动 - 跳跃或防御
+                            if (dy < 0) {
+                                // 向上滑 - 跳跃
+                                setKeys(prev => ({ ...prev, 'arrowup': true }));
+                                setTimeout(() => setKeys(prev => ({ ...prev, 'arrowup': false })), 200);
+                            } else {
+                                // 向下滑 - 防御
+                                setKeys(prev => ({ ...prev, 'k': true }));
+                                setTimeout(() => setKeys(prev => ({ ...prev, 'k': false })), 300);
+                            }
+                        }
+                    } else if (duration < TAP_THRESHOLD) {
+                        // 点击操作 - 攻击
+                        // 检查是否点击在屏幕下半部分（防御区）还是上半部分（攻击区）
+                        if (y > canvasHeight / 2) {
+                            // 下半部分 - 防御
+                            setKeys(prev => ({ ...prev, 'k': true }));
+                            setTimeout(() => setKeys(prev => ({ ...prev, 'k': false })), 300);
+                        } else {
+                            // 上半部分 - 攻击
+                            setKeys(prev => ({ ...prev, 'j': true }));
+                            setTimeout(() => setKeys(prev => ({ ...prev, 'j': false })), 150);
+                        }
+                    }
+                }
+            }
+        };
+
+        canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+        canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+        canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+
+        return () => {
+            canvas.removeEventListener('touchstart', handleTouchStart);
+            canvas.removeEventListener('touchmove', handleTouchMove);
+            canvas.removeEventListener('touchend', handleTouchEnd);
+        };
+    }, []);
+
     // 游戏初始化
     const initGame = useCallback(() => {
         const canvas = canvasRef.current;
@@ -103,8 +287,18 @@ export default function App() {
         resizeHandler();
         window.addEventListener('resize', resizeHandler);
 
+        // 检查精灵是否已加载，决定使用 SpriteStickman 还是 Stickman
+        const useSprites = loaded;
+        const StickmanClass = useSprites ? SpriteStickman : Stickman;
+
+        if (useSprites) {
+            showNotification('✅ 精灵动画已加载!', 1500);
+        } else {
+            showNotification('⚠️ 使用程序化绘制 (精灵未加载)', 1500);
+        }
+
         // 初始化玩家
-        gameRef.current.player1 = new Stickman(
+        gameRef.current.player1 = new StickmanClass(
             150, 0, '#ff6b6b',
             { left: 'a', right: 'd', jump: 'w', attack: ' ', block: 's' },
             1,
@@ -112,7 +306,7 @@ export default function App() {
             gameRef.current.canvasHeight
         );
 
-        gameRef.current.player2 = new Stickman(
+        gameRef.current.player2 = new StickmanClass(
             620, 0, '#4dabf7',
             { left: 'arrowleft', right: 'arrowright', jump: 'arrowup', attack: 'j', block: 'k' },
             2,
@@ -123,6 +317,12 @@ export default function App() {
         const groundLevel = gameRef.current.canvasHeight - 80;
         gameRef.current.player1.y = groundLevel - gameRef.current.player1.height;
         gameRef.current.player2.y = groundLevel - gameRef.current.player2.height;
+
+        // 如果使用精灵动画，启用精灵动画模式
+        if (useSprites && gameRef.current.player1.checkSpriteAvailability) {
+            gameRef.current.player1.checkSpriteAvailability();
+            gameRef.current.player2.checkSpriteAvailability();
+        }
 
         setGameState(prev => ({
             ...prev,
@@ -162,7 +362,7 @@ export default function App() {
         return () => {
             window.removeEventListener('resize', resizeHandler);
         };
-    }, []);
+    }, [loaded]);
 
     // 游戏主循环
     const gameLoop = useCallback(() => {
@@ -172,6 +372,11 @@ export default function App() {
         const ctx = canvas.getContext('2d');
         const p1 = gameRef.current.player1;
         const p2 = gameRef.current.player2;
+
+        // 计算deltaTime
+        const currentTime = Date.now();
+        const deltaTime = gameRef.current.lastTime ? currentTime - gameRef.current.lastTime : 16;
+        gameRef.current.lastTime = currentTime;
 
         ctx.clearRect(0, 0, gameRef.current.canvasWidth, gameRef.current.canvasHeight);
 
@@ -203,9 +408,18 @@ export default function App() {
         drawWeapons(ctx, gameRef.current.weapons);
 
         if (!gameState.paused && !gameState.gameOver) {
-            // 更新玩家
-            p1.update(keys, p2);
-            p2.update(keys, p1);
+            // 更新玩家（传递deltaTime给SpriteStickman）
+            if (p1.update.length >= 3) {
+                p1.update(keys, p2, deltaTime);
+            } else {
+                p1.update(keys, p2);
+            }
+
+            if (p2.update.length >= 3) {
+                p2.update(keys, p1, deltaTime);
+            } else {
+                p2.update(keys, p1);
+            }
 
             // 统计
             if (p1.weapon && p1.weapon.durability < p1.weapon.maxDurability) {
@@ -220,7 +434,8 @@ export default function App() {
                 if (survivalMode && p2.hp <= 0) {
                     // 生存模式：AI复活并增强
                     const groundLevel = gameRef.current.canvasHeight - 80;
-                    gameRef.current.player2 = new Stickman(
+                    const StickmanClass = loaded ? SpriteStickman : Stickman;
+                    gameRef.current.player2 = new StickmanClass(
                         620, 0, '#4dabf7',
                         { left: 'arrowleft', right: 'arrowright', jump: 'arrowup', attack: 'j', block: 'k' },
                         2,
@@ -232,6 +447,9 @@ export default function App() {
                     gameRef.current.player2.attackDamage += 2;
                     gameRef.current.player2.maxHp += 10;
                     gameRef.current.player2.hp = gameRef.current.player2.maxHp;
+                    if (loaded && gameRef.current.player2.checkSpriteAvailability) {
+                        gameRef.current.player2.checkSpriteAvailability();
+                    }
                     showNotification('💀 AI复活! 强度提升!', 1500);
                 } else {
                     const winner = p1.hp > 0 ? '玩家1' : '玩家2';
@@ -282,7 +500,7 @@ export default function App() {
         if (!gameState.gameOver) {
             gameRef.current.animationFrame = requestAnimationFrame(gameLoop);
         }
-    }, [keys, gameState.paused, gameState.gameOver, survivalMode]);
+    }, [keys, gameState.paused, gameState.gameOver, survivalMode, loaded]);
 
     useEffect(() => {
         if (!gameState.gameOver && gameRef.current.player1 && gameRef.current.player2) {
@@ -306,6 +524,10 @@ export default function App() {
 
     // 游戏控制处理
     const handleStart = () => {
+        if (!loaded && !loading) {
+            showNotification('⚠️ 精灵加载中，请稍候...', 1500);
+            return;
+        }
         initGame();
     };
 
@@ -423,7 +645,7 @@ export default function App() {
         }
     };
 
-    // 触摸控制
+    // 触摸控制（备用，用于非Canvas区域）
     const handleTouchStart = (key) => {
         setKeys(prev => ({ ...prev, [key]: true }));
     };
@@ -439,6 +661,34 @@ export default function App() {
                     <div className="icon">📱</div>
                     <h2>请旋转设备</h2>
                     <p>建议使用横屏模式以获得最佳体验</p>
+                </div>
+            )}
+
+            {/* 精灵加载状态显示 */}
+            {loading && (
+                <div className="sprite-loading-overlay">
+                    <div className="loading-content">
+                        <div className="loading-spinner"></div>
+                        <h3>加载精灵动画中...</h3>
+                        <div className="loading-bar">
+                            <div className="loading-progress" style={{width: `${progress}%`}}></div>
+                        </div>
+                        <div className="loading-text">{progress}%</div>
+                        <div className="sprite-status">
+                            {Object.entries(spriteStatus).map(([action, status]) => (
+                                <div key={action} className={`status-item ${status}`}>
+                                    {action}: {status === 'loaded' ? '✅' : status === 'failed' ? '❌' : '⏳'}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* 精灵加载失败提示 */}
+            {error && !loading && (
+                <div className="notification show" style={{background: 'rgba(255, 100, 100, 0.9)'}}>
+                    {error}
                 </div>
             )}
 
@@ -553,6 +803,29 @@ export default function App() {
                 )}
 
                 <div className="canvas-container">
+                    {/* 触摸提示 - 仅在移动端显示 */}
+                    {isMobile && !gameState.gameOver && (
+                        <div className="touch-hint">
+                            <div className="touch-hint-left">
+                                <div>👆 点击上半屏 - 攻击</div>
+                                <div>👇 点击下半屏 - 防御</div>
+                                <div>↔️ 左右滑动 - 移动</div>
+                                <div>⬆️ 向上滑 - 跳跃</div>
+                            </div>
+                            <div className="touch-hint-right">
+                                <div>👆 点击上半屏 - 攻击</div>
+                                <div>👇 点击��半屏 - 防御</div>
+                                <div>↔️ 左右滑动 - 移动</div>
+                                <div>⬆️ 向上滑 - 跳跃</div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* 中心分割线 - 视觉指示 */}
+                    {!gameState.gameOver && (
+                        <div className="center-divider"></div>
+                    )}
+
                     <canvas
                         ref={canvasRef}
                         width={800}
@@ -562,7 +835,8 @@ export default function App() {
                             height: '100%',
                             borderRadius: '8px',
                             background: 'linear-gradient(180deg, #87CEEB 0%, #E0F6FF 50%, #90EE90 50%, #228B22 100%)',
-                            boxShadow: '0 0 20px rgba(0, 0, 0, 0.3)'
+                            boxShadow: '0 0 20px rgba(0, 0, 0, 0.3)',
+                            touchAction: 'none'
                         }}
                     />
 
@@ -676,15 +950,13 @@ export default function App() {
                     >
                         🎮 游戏帮助<br/><br/>
                         <div style={{fontSize: '0.6em', textAlign: 'left', maxWidth: '600px', lineHeight: '1.6'}}>
-                            <strong>玩家1 (红色):</strong><br/>
-                            W - 跳跃 | A/D - 左右移动<br/>
-                            空格 - 攻击 | S - 防御<br/>
-                            F - 使用武器<br/><br/>
-
-                            <strong>玩家2 (蓝色):</strong><br/>
-                            ↑ - 跳跃 | ←/→ - 左右移动<br/>
-                            J - 攻击 | K - 防御<br/>
-                            J - 使用武器<br/><br/>
+                            <strong>🎮 控制方式:</strong><br/>
+                            <strong>键盘:</strong> 玩家1 WASD + 空格/S | 玩家2 方向键 + J/K<br/>
+                            <strong>触屏滑动:</strong> 屏幕左右分半，每半控制一个玩家<br/>
+                            • 上半屏点击 = 攻击<br/>
+                            • 下半屏点击 = 防御<br/>
+                            • 左右滑动 = 移动<br/>
+                            • 向上滑动 = 跳跃<br/><br/>
 
                             <strong>新增武器 (10种):</strong><br/>
                             🔥火焰剑 ⚡闪电锤 🧊冰霜弓 💎钻石匕首<br/>
@@ -701,6 +973,10 @@ export default function App() {
                             <strong>游戏模式:</strong><br/>
                             💀硬核 - 50HP, 双倍伤害<br/>
                             🎯生存 - AI无限复活，越战越强<br/><br/>
+
+                            <strong>精灵动画:</strong><br/>
+                            ✅ 已加载: idle, walk, run, attack_slash, hurt, victory<br/>
+                            💡 自动使用，未加载时回退到程序化绘制<br/><br/>
 
                             <strong>点击任意处关闭</strong>
                         </div>

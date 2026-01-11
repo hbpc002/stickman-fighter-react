@@ -910,3 +910,178 @@ body {
     25% { transform: translateX(-3px); }
     75% { transform: translateX(3px); }
 }
+
+/* 精灵加载状态覆盖层 */
+.sprite-loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.95);
+    z-index: 9998;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(10px);
+}
+
+.loading-content {
+    background: rgba(255, 255, 255, 0.1);
+    padding: 30px;
+    border-radius: 15px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    text-align: center;
+    min-width: 300px;
+    animation: slideUp 0.3s ease;
+}
+
+.loading-spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid rgba(255, 255, 255, 0.2);
+    border-top: 4px solid #4dabf7;
+    border-radius: 50%;
+    margin: 0 auto 15px;
+    animation: spin 1s linear infinite;
+}
+
+.loading-content h3 {
+    color: white;
+    margin-bottom: 15px;
+    font-size: 1.3em;
+}
+
+.loading-bar {
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.loading-progress {
+    height: 100%;
+    background: linear-gradient(90deg, #4dabf7, #74c0fc);
+    transition: width 0.3s ease;
+    box-shadow: 0 0 10px rgba(77, 171, 247, 0.8);
+}
+
+.loading-text {
+    color: white;
+    font-size: 1.1em;
+    font-weight: bold;
+    margin-bottom: 15px;
+}
+
+.sprite-status {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-top: 15px;
+    text-align: left;
+}
+
+.status-item {
+    background: rgba(0, 0, 0, 0.4);
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 0.85em;
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.status-item.loaded {
+    border-color: rgba(0, 255, 100, 0.5);
+    background: rgba(0, 255, 100, 0.1);
+}
+
+.status-item.failed {
+    border-color: rgba(255, 100, 100, 0.5);
+    background: rgba(255, 100, 100, 0.1);
+}
+
+/* 触摸提示 */
+.touch-hint {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    z-index: 3;
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+.touch-hint-left,
+.touch-hint-right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    padding: 15px;
+    font-size: 0.75em;
+    font-weight: bold;
+    text-align: center;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.touch-hint-left {
+    color: #ff6b6b;
+    background: linear-gradient(90deg, rgba(255, 107, 107, 0.1), transparent);
+}
+
+.touch-hint-right {
+    color: #4dabf7;
+    background: linear-gradient(270deg, rgba(77, 171, 247, 0.1), transparent);
+}
+
+/* 中心分割线 */
+.center-divider {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(180deg,
+        transparent 0%,
+        rgba(255, 255, 255, 0.5) 20%,
+        rgba(255, 255, 255, 0.5) 80%,
+        transparent 100%);
+    transform: translateX(-50%);
+    z-index: 2;
+    pointer-events: none;
+    box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+}
+
+/* 移动端优化 - 隐藏触摸提示 */
+@media (min-width: 769px) {
+    .touch-hint {
+        display: none;
+    }
+}
+
+/* 移动端触摸提示调整 */
+@media (max-width: 768px) {
+    .touch-hint-left,
+    .touch-hint-right {
+        font-size: 0.65em;
+        padding: 10px;
+        gap: 5px;
+    }
+
+    .touch-hint div {
+        line-height: 1.2;
+    }
+}
+
+/* 精灵加载失败时的错误提示样式增强 */
+.notification.error {
+    background: rgba(200, 50, 50, 0.95) !important;
+    border-color: rgba(255, 100, 100, 0.8) !important;
+    animation: shake 0.3s ease;
+}
