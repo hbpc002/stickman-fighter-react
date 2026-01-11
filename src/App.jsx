@@ -814,7 +814,7 @@ export default function App() {
                             </div>
                             <div className="touch-hint-right">
                                 <div>👆 点击上半屏 - 攻击</div>
-                                <div>👇 点击��半屏 - 防御</div>
+                                <div>👇 点击下半屏 - 防御</div>
                                 <div>↔️ 左右滑动 - 移动</div>
                                 <div>⬆️ 向上滑 - 跳跃</div>
                             </div>

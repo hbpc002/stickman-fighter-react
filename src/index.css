@@ -508,118 +508,337 @@ body {
     to { transform: translate(-50%, -50%); opacity: 1; }
 }
 
-/* 移动端适配 */
+/* 移动端适配 - 优化布局防止溢出 */
 @media (max-width: 768px), (max-height: 600px) {
-    .control-panel-left, .control-panel-right {
-        width: 60px;
-        padding-top: 50px;
+    /* 确保body和root不会溢出 */
+    body, #root {
+        overflow: hidden;
+        height: 100vh;
+        width: 100vw;
     }
 
-    .btn {
-        width: 50px;
-        height: 40px;
-        font-size: 1em;
+    /* 主容器改为垂直布局，为底部按钮留出空间 */
+    .main-container {
+        flex-direction: column;
+        padding: 2px;
+        gap: 2px;
+        height: 100vh;
+        width: 100vw;
+        overflow: hidden;
     }
 
-    .btn.move {
-        width: 38px;
+    /* 隐藏虚拟按键面板（使用手势控制） */
+    .control-panel-left,
+    .control-panel-right {
+        display: none;
     }
 
-    .player-label {
-        font-size: 0.7em;
-    }
-
+    /* 状态栏调整 - 改为相对定位，紧凑显示 */
     .status-bar-top {
-        top: 3px;
-        gap: 3px;
+        position: relative;
+        top: 0;
+        left: 0;
+        transform: none;
+        width: calc(100% - 4px);
+        margin: 2px;
+        padding: 4px;
+        gap: 4px;
+        background: rgba(0, 0, 0, 0.5);
+        border-radius: 6px;
+        flex-shrink: 0;
     }
 
     .player-status-mini {
-        min-width: 70px;
-        padding: 3px 5px;
-    }
-
-    .mini-name {
+        min-width: 50px;
+        padding: 2px 4px;
         font-size: 0.65em;
     }
 
-    .mini-hp {
-        height: 4px;
+    .mini-name {
+        font-size: 0.6em;
     }
 
-    .mini-stamina {
-        height: 3px;
+    .mini-hp, .mini-stamina {
+        height: 2px;
     }
 
+    /* 画布容器 - 为顶部状态栏和底部按钮留出固定空间 */
+    .canvas-container {
+        flex: 1;
+        height: auto;
+        min-height: 0;
+        margin: 2px 0;
+        border-radius: 8px;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    #gameCanvas {
+        width: 100%;
+        height: 100%;
+        max-height: calc(100vh - 130px); /* 顶部状态栏(30px) + 底部按钮(80px) + 间距 */
+        object-fit: contain;
+        border-radius: 8px;
+    }
+
+    /* 底部控制栏 - 紧凑布局，固定高度 */
+    .bottom-controls {
+        position: relative;
+        bottom: 0;
+        left: 0;
+        transform: none;
+        width: calc(100% - 4px);
+        max-width: 100%;
+        margin: 2px;
+        padding: 4px;
+        gap: 2px;
+        flex-wrap: wrap;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 8px;
+        flex-shrink: 0;
+        max-height: 80px;
+        overflow-y: auto;
+    }
+
+    .func-btn {
+        padding: 4px 6px;
+        font-size: 0.65em;
+        white-space: nowrap;
+        min-width: 40px;
+        height: 28px;
+    }
+
+    /* 状态指示器调整 */
     .combo-indicator {
-        top: 40px;
-        font-size: 0.9em;
-        padding: 3px 8px;
+        top: 35px;
+        font-size: 0.8em;
+        padding: 2px 6px;
+        white-space: nowrap;
     }
 
     .weapon-status {
-        top: 75px;
-        font-size: 0.75em;
-        padding: 4px 8px;
+        top: 60px;
+        font-size: 0.65em;
+        padding: 2px 5px;
+        white-space: nowrap;
     }
 
     .mode-indicator {
-        top: 110px;
-        font-size: 0.7em;
-        padding: 3px 8px;
+        top: 85px;
+        font-size: 0.6em;
+        padding: 2px 5px;
+    }
+
+    /* 游戏结束/帮助遮罩 */
+    .game-over-overlay {
+        backdrop-filter: blur(8px);
     }
 
     .winner-text {
-        font-size: 1.8em;
+        font-size: 1.3em;
+        margin-bottom: 12px;
     }
 
-    .bottom-controls {
-        gap: 3px;
-        bottom: 3px;
-    }
-
-    .func-btn {
-        padding: 6px 8px;
-        font-size: 0.8em;
-    }
-
-    .notification {
-        font-size: 0.95em;
-        padding: 12px 18px;
-    }
-}
-
-/* 横屏适配 */
-@media (orientation: landscape) and (max-height: 500px) {
-    .main-container {
-        gap: 3px;
-        padding: 3px;
-    }
-
-    .control-panel-left, .control-panel-right {
-        width: 55px;
-        height: calc(100% - 35px);
-        padding-top: 35px;
-    }
-
-    .btn {
-        width: 45px;
-        height: 35px;
+    .reset-btn {
+        padding: 8px 16px;
         font-size: 0.9em;
     }
 
-    .canvas-container {
-        height: calc(100% - 35px);
+    /* 通知框 */
+    .notification {
+        font-size: 0.75em;
+        padding: 8px 12px;
+        max-width: 90%;
     }
 
-    .bottom-controls {
-        bottom: 3px;
+    /* 触摸提示 */
+    .touch-hint {
+        opacity: 0.5;
+    }
+
+    .touch-hint-left,
+    .touch-hint-right {
+        font-size: 0.55em;
+        padding: 6px;
         gap: 3px;
     }
 
-    .func-btn {
-        padding: 5px 7px;
+    /* 精灵加载覆盖层 */
+    .sprite-loading-overlay {
+        padding: 10px;
+    }
+
+    .loading-content {
+        padding: 15px;
+        min-width: 200px;
+        max-width: 90%;
+    }
+
+    .loading-content h3 {
+        font-size: 1em;
+        margin-bottom: 8px;
+    }
+
+    .sprite-status {
+        grid-template-columns: 1fr;
+        gap: 4px;
+    }
+
+    .status-item {
+        font-size: 0.65em;
+        padding: 3px 6px;
+    }
+
+    /* 确保中心分割线在移动端不显示（空间太小） */
+    .center-divider {
+        display: none;
+    }
+
+    /* 移动端触摸提示调整 */
+    .touch-hint-left,
+    .touch-hint-right {
+        font-size: 0.5em;
+        padding: 4px;
+        gap: 2px;
+    }
+}
+
+/* 横屏适配 - 移动端横屏优化 */
+@media (orientation: landscape) and (max-height: 500px) {
+    /* 确保body和root不会溢出 */
+    body, #root {
+        overflow: hidden;
+        height: 100vh;
+        width: 100vw;
+    }
+
+    /* 横屏时保持垂直布局，但更紧凑 */
+    .main-container {
+        flex-direction: column;
+        gap: 2px;
+        padding: 2px;
+        height: 100vh;
+        width: 100vw;
+        overflow: hidden;
+    }
+
+    .control-panel-left,
+    .control-panel-right {
+        display: none;
+    }
+
+    /* 状态栏更紧凑 */
+    .status-bar-top {
+        position: relative;
+        width: calc(100% - 4px);
+        margin: 2px;
+        padding: 2px;
+        gap: 2px;
+        flex-shrink: 0;
+    }
+
+    .player-status-mini {
+        min-width: 45px;
+        padding: 2px 3px;
+        font-size: 0.55em;
+    }
+
+    .mini-name {
+        font-size: 0.55em;
+    }
+
+    .mini-hp, .mini-stamina {
+        height: 2px;
+    }
+
+    /* 画布容器 */
+    .canvas-container {
+        flex: 1;
+        min-height: 0;
+        margin: 1px 0;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    #gameCanvas {
+        max-height: calc(100vh - 90px); /* 更小的预留空间 */
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+
+    /* 状态指示器 */
+    .combo-indicator {
+        top: 28px;
         font-size: 0.75em;
+        padding: 2px 5px;
+        white-space: nowrap;
+    }
+
+    .weapon-status {
+        top: 50px;
+        font-size: 0.6em;
+        padding: 2px 4px;
+        white-space: nowrap;
+    }
+
+    .mode-indicator {
+        top: 72px;
+        font-size: 0.55em;
+        padding: 2px 4px;
+    }
+
+    /* 底部按钮 */
+    .bottom-controls {
+        position: relative;
+        width: calc(100% - 4px);
+        margin: 2px;
+        padding: 2px;
+        gap: 2px;
+        flex-shrink: 0;
+        max-height: 60px;
+        overflow-y: auto;
+    }
+
+    .func-btn {
+        padding: 3px 5px;
+        font-size: 0.6em;
+        min-width: 35px;
+        height: 24px;
+    }
+
+    /* 游戏结束 */
+    .winner-text {
+        font-size: 1.2em;
+    }
+
+    .reset-btn {
+        padding: 6px 12px;
+        font-size: 0.8em;
+    }
+
+    /* 通知 */
+    .notification {
+        font-size: 0.65em;
+        padding: 6px 10px;
+    }
+
+    /* 触摸提示 */
+    .touch-hint-left,
+    .touch-hint-right {
+        font-size: 0.45em;
+        padding: 4px;
+        gap: 2px;
+    }
+
+    /* 隐藏中心分割线 */
+    .center-divider {
+        display: none;
     }
 }
 
@@ -1084,4 +1303,71 @@ body {
     background: rgba(200, 50, 50, 0.95) !important;
     border-color: rgba(255, 100, 100, 0.8) !important;
     animation: shake 0.3s ease;
+}
+
+/* 超小屏幕适配 (iPhone SE, 小屏Android等) */
+@media (max-width: 380px) {
+    .status-bar-top {
+        padding: 2px;
+        gap: 2px;
+    }
+
+    .player-status-mini {
+        min-width: 40px;
+        padding: 2px 2px;
+        font-size: 0.6em;
+    }
+
+    .mini-name {
+        font-size: 0.55em;
+    }
+
+    #gameCanvas {
+        max-height: calc(100vh - 120px);
+    }
+
+    .bottom-controls {
+        padding: 2px;
+        gap: 1px;
+        max-height: 70px;
+    }
+
+    .func-btn {
+        padding: 3px 4px;
+        font-size: 0.6em;
+        min-width: 32px;
+        height: 24px;
+    }
+
+    .combo-indicator {
+        top: 30px;
+        font-size: 0.7em;
+        padding: 2px 4px;
+    }
+
+    .weapon-status {
+        top: 52px;
+        font-size: 0.55em;
+        padding: 2px 4px;
+    }
+
+    .mode-indicator {
+        top: 74px;
+        font-size: 0.5em;
+        padding: 2px 3px;
+    }
+
+    .notification {
+        font-size: 0.65em;
+        padding: 6px 10px;
+    }
+
+    .winner-text {
+        font-size: 1.1em;
+    }
+
+    .reset-btn {
+        padding: 6px 12px;
+        font-size: 0.8em;
+    }
 }
